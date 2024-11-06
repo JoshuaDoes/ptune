@@ -1,0 +1,66 @@
+#!/system/bin/sh
+
+#MODDIR=${0%/*}
+
+VM=/proc/sys/vm
+KR=/proc/sys/kernel
+CS=/dev/cpuset
+VS=/proc/vendor_sched
+VSG=$VS/groups
+CF=/sys/devices/system/cpu/cpufreq
+
+# Wait for successful boot
+while [ "$(getprop sys.boot_completed | tr -d '\r')" != "1" ]; do sleep 1; done
+
+# Adjust our kernel's tunables
+echo 0 > $VM/dirty_writeback_centisecs
+echo 1 > $VM/swappiness
+echo 5 > $VM/vfs_cache_pressure
+echo 1 > $KR/sched_child_runs_first
+
+## top-app
+echo "0-7" > $CS/top-app/cpus
+
+## system
+echo "0-7" > $CS/system/cpus
+
+# Allow most vendor scheduler groups to migrate to X1 cores
+chmod 200 $VS/util_threshold
+chmod 200 $VSG/cam/prefer_high_cap
+chmod 200 $VSG/cam/uclamp_max
+chmod 200 $VSG/cam_power/prefer_high_cap
+chmod 200 $VSG/cam_power/uclamp_max
+chmod 200 $VSG/dex2oat/prefer_high_cap
+chmod 200 $VSG/dex2oat/uclamp_max
+chmod 200 $VSG/fg/prefer_high_cap
+chmod 200 $VSG/fg/uclamp_max
+chmod 200 $VSG/ota/prefer_high_cap
+chmod 200 $VSG/ota/uclamp_max
+chmod 200 $VSG/rt/prefer_high_cap
+chmod 200 $VSG/rt/uclamp_max
+chmod 200 $VSG/sf/prefer_high_cap
+chmod 200 $VSG/sf/uclamp_max
+chmod 200 $VSG/sys/prefer_high_cap
+chmod 200 $VSG/sys/uclamp_max
+chmod 200 $VSG/ta/prefer_high_cap
+chmod 200 $VSG/ta/uclamp_max
+
+echo "2048 2048 2048" > $VS/util_threshold
+echo 1 > $VSG/cam/prefer_high_cap
+echo 1024 > $VSG/cam/uclamp_max
+echo 1 > $VSG/cam_power/prefer_high_cap
+echo 1024 > $VSG/cam_power/uclamp_max
+echo 0 > $VSG/dex2oat/prefer_high_cap
+echo 1024 > $VSG/dex2oat/uclamp_max
+echo 1 > $VSG/fg/prefer_high_cap
+echo 1024 > $VSG/fg/uclamp_max
+echo 0 > $VSG/ota/prefer_high_cap
+echo 1024 > $VSG/ota/uclamp_max
+echo 1 > $VSG/rt/prefer_high_cap
+echo 1024 > $VSG/rt/uclamp_max
+echo 1 > $VSG/sf/prefer_high_cap
+echo 1024 > $VSG/sf/uclamp_max
+echo 1 > $VSG/sys/prefer_high_cap
+echo 1024 > $VSG/sys/uclamp_max
+echo 0 > $VSG/ta/prefer_high_cap
+echo 1024 > $VSG/ta/uclamp_max

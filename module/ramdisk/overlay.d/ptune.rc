@@ -1,0 +1,466 @@
+on early-init
+    ## Enable the system cpuset
+    mkdir /dev/cpuset/system
+    chown system system /dev/cpuset/system/tasks
+    chmod 0664 /dev/cpuset/system/tasks
+
+    ## Support stune, this might get backported by someone
+    mkdir /dev/stune/system
+    chown system system /dev/stune/system
+    chown system system /dev/stune/system/tasks
+    chown system system /dev/stune/system/cgroup.procs
+    chmod 0664 /dev/stune/system/tasks
+    chmod 0664 /dev/stune/system/cgroup.procs
+
+    ## Support cpuctl
+    mkdir /dev/cpuctl/system
+    chown system system /dev/cpuctl/system
+    chown system system /dev/cpuctl/system/tasks
+    chown system system /dev/cpuctl/system/cgroup.procs
+    chmod 0664 /dev/cpuctl/system/tasks
+    chmod 0664 /dev/cpuctl/system/cgroup.procs
+
+    ## (4x little | 2x mid | 2x big)
+    write /dev/cpuset/system/cpus 0-7
+    write /dev/cpuset/system/mems 0
+
+# # #    SOFTWARE    # # #
+
+# Zygote64
+service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-system-server --socket-name=zygote
+    class main
+    user root
+    group root readproc reserved_disk
+    socket zygote stream 660 root system
+    socket usap_pool_primary stream 660 root system
+    onrestart exec_background - system system -- /system/bin/vdc volume abort_fuse
+    onrestart write /sys/power/state on
+    # NOTE: If the wakelock name here is changed, then also
+    # update it in SystemSuspend.cpp
+    onrestart write /sys/power/wake_lock zygote_kwl
+    onrestart restart audioserver
+    onrestart restart cameraserver
+    onrestart restart media
+    onrestart restart --only-if-running media.tuner
+    onrestart restart netd
+    onrestart restart wificond
+    critical window=${zygote.critical_window.minute:-off} target=zygote-fatal
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Zygote32
+service zygote_secondary /system/bin/app_process32 -Xzygote /system/bin --zygote --socket-name=zygote_secondary --enable-lazy-preload
+    class main
+    user root
+    group root readproc reserved_disk
+    socket zygote_secondary stream 660 root system
+    socket usap_pool_secondary stream 660 root system
+    onrestart restart zygote
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Service manager
+service servicemanager /system/bin/servicemanager
+    class core animation
+    user system
+    group system readproc
+    critical
+    file /dev/kmsg w
+    onrestart setprop servicemanager.ready false
+    onrestart restart --only-if-running apexd
+    onrestart restart audioserver
+    onrestart restart gatekeeperd
+    onrestart class_restart --only-enabled main
+    onrestart class_restart --only-enabled hal
+    onrestart class_restart --only-enabled early_hal
+    shutdown critical
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Power
+service vendor.power-hal-aidl /vendor/bin/hw/android.hardware.power-service.pixel-libperfmgr
+    class hal
+    user root
+    group system
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Audio server
+service audioserver /system/bin/audioserver
+    class core
+    user audioserver
+    group audio camera drmrpc media mediadrm net_bt net_bt_admi>
+    capabilities BLOCK_SUSPEND
+    onrestart restart vendor.audio-hal
+    onrestart restart vendor.audio-hal-aidl
+    onrestart restart vendor.audio-effect-hal-aidl
+    onrestart restart vendor.audio-hal-4-0-msd
+    onrestart restart audio_proxy_service
+    task_profiles ProcessCapacityHigh HighPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Camera server
+service cameraserver /system/bin/cameraserver
+    class main
+    user cameraserver
+    group audio camera input drmrpc
+    task_profiles CameraServiceCapacity MaxPerformance
+    capabilities SYS_NICE
+    onrestart class_restart cameraWatchdog
+    interface aidl android.frameworks.cameraservice.service.ICameraService/default
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# USB
+service usbd /system/bin/usbd
+    class late_start
+    oneshot
+    user root
+    group root usb system
+    ioprio rt 0
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Media extractor
+service mediaextractor /system/bin/mediaextractor
+    class main
+    user mediaex
+    group drmrpc mediadrm
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Media server
+service media /system/bin/mediaserver
+    class main
+    user media
+    group audio camera inet net_bt net_bt_admin net_bw_acct drmrpc mediadrm
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# SurfaceFlinger
+service surfaceflinger /system/bin/surfaceflinger
+    class core animation
+    user system
+    group graphics drmrpc readproc
+    capabilities SYS_NICE
+    onrestart restart --only-if-running zygote
+    socket pdx/system/vr/display/client     stream 0666 system graphics u:object_r:pdx_display_client_endpoint_socket:s0
+    socket pdx/system/vr/display/manager    stream 0666 system graphics u:object_r:pdx_display_manager_endpoint_socket:s0
+    socket pdx/system/vr/display/vsync      stream 0666 system graphics u:object_r:pdx_display_vsync_endpoint_socket:s0
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Package installer
+service installd /system/bin/installd
+    class main
+    user root
+    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER FSETID KILL SETGID SETUID SYS_ADMIN
+    ioprio rt 0
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# APEX installer
+service apexd /system/bin/apexd
+    interface aidl apexservice
+    class core
+    user root
+    group system
+    oneshot
+    disabled
+    reboot_on_failure reboot,apexd-failed
+    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER SYS_ADMIN
+    ioprio rt 0
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# APEX bootstrapper
+service apexd-bootstrap /system/bin/apexd --bootstrap
+    user root
+    group system
+    oneshot
+    disabled
+    reboot_on_failure reboot,bootloader,bootstrap-apexd-failed
+    capabilities SYS_ADMIN
+    ioprio rt 0
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# APEX snapshot manager
+service apexd-snapshotde /system/bin/apexd --snapshotde
+    user root
+    group system
+    oneshot
+    disabled
+    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER
+    ioprio rt 0
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Update engine
+service update_engine /system/bin/update_engine --logtostderr --logtofile --foreground
+    class late_start
+    user root
+    group root system wakelock inet cache media_rw
+    task_profiles OtaProfiles
+    disabled
+    ioprio rt 0
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Update verifier
+service update_verifier /system/bin/update_verifier
+    user root
+    group cache system
+    ioprio rt 0
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Gatekeeper
+service gatekeeperd /system/bin/gatekeeperd /data/misc/gatekeeper
+    class late_start
+    user system
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Keystore
+service keystore2 /system/bin/keystore2 /data/misc/keystore
+    class early_hal
+    user keystore
+    group keystore readproc log
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Credstore
+service credstore /system/bin/credstore /data/misc/credstore
+    class core
+    user credstore
+    group credstore
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# # #    HARDWARE    # # #
+
+# AOC
+service aocd /vendor/bin/aocd
+    class late_start
+    user root
+    group root system audio
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# AOCX
+service aocxd /vendor/bin/aocxd
+    class late_start
+    user root
+    group root system audio
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Audio
+service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
+    class hal
+    user audioserver
+    group audio camera drmrpc inet media mediadrm net_bt net_bt_admin net_bw_acct wakelock context_hub system
+    capabilities BLOCK_SUSPEND SYS_NICE
+    onrestart restart audioserver
+    task_profiles ProcessCapacityHigh HighPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# TwoShay
+service twoshay /vendor/bin/twoshay -s
+    class hal
+    user root
+    group input
+    disabled
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Fingerprint
+service vendor.fingerprint-goodix /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix
+    class late_start
+    user system
+    group system input
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Citadel
+service vendor.citadeld /vendor/bin/hw/citadeld
+    class early_hal
+    user hsm
+    group hsm
+    disabled
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# EdgeTPU
+service edgetpu_vendor_service /vendor/bin/hw/vendor.google.edgetpu_vendor_service@1.0-service
+    interface aidl com.google.edgetpu.IEdgeTpuVendorService/default
+    disabled
+    oneshot
+    user system
+    group systemservice vendor.google.radioext@1.0 /vendor/bin/hw/vendor.google.radioext@1.0-service
+    class hal
+    user radio
+    group radio system
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Graphics allocator
+service vendor.graphics.allocator-default /vendor/bin/hw/android.hardware.graphics.allocator-V1-service
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# HWC
+service vendor.hwcomposer-3 /vendor/bin/hw/android.hardware.composer.hwc3-service.pixel
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    onrestart restart surfaceflinger
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# RIL
+service ril-daemon /vendor/bin/hw/rild_exynos
+    class main
+    user radio
+    group radio cache inet misc audio log readproc wakelock
+    capabilities BLOCK_SUSPEND NET_ADMIN NET_RAW
+    seclabel u:r:rild:s0
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Modem
+service cpboot-daemon /vendor/bin/cbd -d -t ${ro.vendor.cbd.modem_type} -P by-name/${vendor.cbd.partition} -s 2
+    class main
+    user radio
+    group radio system cache inet misc audio sdcard_rw log
+    capabilities BLOCK_SUSPEND NET_ADMIN NET_RAW SYSLOG
+    seclabel u:r:cbd:s0
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# WiFi
+service wpa_supplicant /vendor/bin/hw/wpa_supplicant \
+    -O/data/vendor/wifi/wpa/sockets -dd \
+    -g@android:wpa_wlan0
+    interface aidl android.hardware.wifi.supplicant.ISupplicant/default
+    class main
+    socket wpa_wlan0 dgram 660 wifi wifi
+    user root
+    disabled
+    oneshot
+    task_profiles ProcessCapacityHigh MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
