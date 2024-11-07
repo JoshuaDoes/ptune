@@ -3,6 +3,7 @@ on early-init
     mkdir /dev/cpuset/system
     chown system system /dev/cpuset/system/tasks
     chmod 0664 /dev/cpuset/system/tasks
+    write /dev/cpuset/system/mems 0
 
     ## Support stune, this might get backported by someone
     mkdir /dev/stune/system
@@ -20,9 +21,13 @@ on early-init
     chmod 0664 /dev/cpuctl/system/tasks
     chmod 0664 /dev/cpuctl/system/cgroup.procs
 
-    ## (4x little | 2x mid | 2x big)
+    ## Support gs101, gs201, gs401
     write /dev/cpuset/system/cpus 0-7
-    write /dev/cpuset/system/mems 0
+    write /dev/cpuset/top-app/cpus 0-7
+
+    ## Support gs301
+    write /dev/cpuset/system/cpus 0-8
+    write /dev/cpuset/top-app/cpus 0-8
 
 # # #    SOFTWARE    # # #
 
@@ -35,8 +40,6 @@ service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-s
     socket usap_pool_primary stream 660 root system
     onrestart exec_background - system system -- /system/bin/vdc volume abort_fuse
     onrestart write /sys/power/state on
-    # NOTE: If the wakelock name here is changed, then also
-    # update it in SystemSuspend.cpp
     onrestart write /sys/power/wake_lock zygote_kwl
     onrestart restart audioserver
     onrestart restart cameraserver

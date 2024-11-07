@@ -20,9 +20,11 @@ echo 1 > $KR/sched_child_runs_first
 
 ## top-app
 echo "0-7" > $CS/top-app/cpus
+echo "0-8" > $CS/top-app/cpus
 
 ## system
 echo "0-7" > $CS/system/cpus
+echo "0-8" > $CS/system/cpus
 
 # Allow most vendor scheduler groups to migrate to X1 cores
 chmod 200 $VS/util_threshold

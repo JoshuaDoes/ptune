@@ -16,9 +16,31 @@
 
 ### MAGISK IS *REQUIRED*, NO IFS ANDS OR BUTS ABOUT IT!
 
-So far this module is only compatible with Pixel 6 (Tensor G1) and Pixel 7 (Tensor G2) series devices due to the nature of the patches.
+So far this module is only compatible with Pixel 6 (Tensor G1), Pixel 7 (Tensor G2), Pixel 8 (Tensor G3) and Pixel 9 (Tensor G4) series devices. This is due to the nature of the patches we are applying.
 
 Additionally, for best compatibility you should be running hentaiOS/helluvaOS based on Android 15, or any other ROM that stays true to Pixel stock in the device tree. Other ROMs might need changes made for support, and you are on your own if you fall into this case.
+
+Just to be clear:
+
+### Supported devices
+
+```
+# raven     = Pixel 6 Pro
+# oriole    = Pixel 6
+# bluejay   = Pixel 6a
+# cheetah   = Pixel 7 Pro
+# panther   = Pixel 7
+# lynx      = Pixel 7a
+# felix     = Pixel Fold
+# tangorpro = Pixel Tablet
+# husky     = Pixel 8 Pro
+# shiba     = Pixel 8
+# akita     = Pixel 8a
+# caiman    = Pixel 9 Pro
+# komodo    = Pixel 9 Pro XL
+# comet     = Pixel 9 Pro Fold
+# tokay     = Pixel 9
+```
 
 ---
 

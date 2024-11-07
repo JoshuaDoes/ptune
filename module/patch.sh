@@ -1,3 +1,53 @@
+echo ""
+echo "# Supported devices"
+echo "raven     = Pixel 6 Pro"
+echo "oriole    = Pixel 6"
+echo "bluejay   = Pixel 6a"
+echo "cheetah   = Pixel 7 Pro"
+echo "panther   = Pixel 7"
+echo "lynx      = Pixel 7a"
+echo "felix     = Pixel Fold"
+echo "tangorpro = Pixel Tablet"
+echo "husky     = Pixel 8 Pro"
+echo "shiba     = Pixel 8"
+echo "akita     = Pixel 8a"
+echo "caiman    = Pixel 9 Pro"
+echo "komodo    = Pixel 9 Pro XL"
+echo "comet     = Pixel 9 Pro Fold"
+echo "tokay     = Pixel 9"
+echo ""
+DEVICES="raven oriole bluejay cheetah panther lynx felix tangorpro husky shiba akita caiman komodo comet tokay"
+
+echo "# Supported releases"
+echo "Android 14"
+echo "Android 15"
+echo ""
+RELEASES="14 15"
+
+DEVICE="$(getprop ro.product.device)"
+DEVICE_FOUND=0
+for dev in $DEVICES; do
+  if [ "$dev" = "$DEVICE" ]; then
+    DEVICE_FOUND=1
+    break
+  fi
+done
+if [ "$DEVICE_FOUND" -eq 0 ]; then
+  abort "* Device $DEVICE is not supported!"
+fi
+
+RELEASE="$(getprop ro.build.version.release)"
+RELEASE_FOUND=0
+for rel in $RELEASES; do
+  if [ "$rel" = "$RELEASE" ]; then
+    RELEASE_FOUND=1
+    break
+  fi
+done
+if [ "$RELEASE_FOUND" -eq 0 ]; then
+  abort "* Android $RELEASE is not supported!"
+fi
+
 PATH="$MODDIR/bin:$PATH"
 SLOT="$(getprop | grep ro.boot.slot_suffix | sed -e 's/.*: \[\(.*\)\].*/\1/')"
 BOOT=boot.img
