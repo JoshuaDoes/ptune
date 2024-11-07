@@ -1,5 +1,9 @@
 ## WARNINGS
 
+# !!!!! DO NOT FLASH ON BETA VERSIONS OF ANDROID 15 !!!!!
+
+# !!!!! ANDROID 15 BETAS ARE TECHNICALLY ANDROID 16, AND THEY CHANGE THE SERVICES WE PATCH !!!!!
+
 ### It goes without saying, your decision to use this module comes with risks. For example, your ambient and loaded temperatures may be different, your device may experience new types of never seen before levels of lag, and system services may behave in profoundly illegitimate ways. My phone hasn't blown up yet, but that doesn't mean it won't. (My phone is still fine, yours should be too.)
 
 ### If you wish to use this module, please provide feedback! It will be most helpful if you can provide as many details as possible, such as the differences you notice between the stock performance and my altered performance, the environmental conditions you are in, if you are noticing increased heating compared to before, etc. The goal is to make sure these are truly the best values, and once confirmed, to submit these new values to as many custom ROMs as possible for their new default values.
