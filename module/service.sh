@@ -66,3 +66,10 @@ echo 1 > $VSG/sys/prefer_high_cap
 echo 1024 > $VSG/sys/uclamp_max
 echo 0 > $VSG/ta/prefer_high_cap
 echo 1024 > $VSG/ta/uclamp_max
+
+resetprop -n debug.sf.early.app.duration 8333333
+resetprop -n debug.sf.early.sf.duration 8333333
+resetprop -n debug.sf.earlyGl.app.duration 8333333
+resetprop -n debug.sf.earlyGl.sf.duration 8333333
+resetprop -n debug.sf.late.app.duration 8333333
+resetprop -n debug.sf.late.sf.duration 8333333

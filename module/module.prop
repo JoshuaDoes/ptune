@@ -1,7 +1,7 @@
 id=ptune
 name=Pixel Tune
-version=v1.1.0
-versionCode=110
+version=v1.1.1
+versionCode=111
 author=JoshuaDoes
 description=Installs a new system cpuset to allow more breathing room for core system services and HALs. Must be reinstalled using the Magisk button labelled 'Action' after kernel or Magisk updates!
 updateJson=https://raw.githubusercontent.com/JoshuaDoes/ptune/dev/update.json
