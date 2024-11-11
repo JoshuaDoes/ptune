@@ -99,7 +99,9 @@ rm -rf META-INF
 
 echo "* Installing service"
 rm /data/adb/service.d/joshuax.sh #v1.0.0
+rm /data/adb/post-fs-data.d/joshuax.sh #v1.0.0
 cp service.sh /data/adb/service.d/ptune.sh
+ln -s /data/adb/service.d/ptune.sh /data/adb/post-fs-data.d/ptune.sh
 
 echo "* Syncing"
 sync

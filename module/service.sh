@@ -26,7 +26,7 @@ echo "0-8" > $CS/top-app/cpus
 echo "0-7" > $CS/system/cpus
 echo "0-8" > $CS/system/cpus
 
-# Allow most vendor scheduler groups to migrate to X1 cores
+# Allow vendor scheduler groups to migrate to any core if cpuset allows
 chmod 200 $VS/util_threshold
 chmod 200 $VSG/cam/prefer_high_cap
 chmod 200 $VSG/cam/uclamp_max
@@ -67,9 +67,13 @@ echo 1024 > $VSG/sys/uclamp_max
 echo 0 > $VSG/ta/prefer_high_cap
 echo 1024 > $VSG/ta/uclamp_max
 
+# Pace frames at 120Hz, minimum 60Hz when SF is late
 resetprop -n debug.sf.early.app.duration 8333333
 resetprop -n debug.sf.early.sf.duration 8333333
 resetprop -n debug.sf.earlyGl.app.duration 8333333
 resetprop -n debug.sf.earlyGl.sf.duration 8333333
 resetprop -n debug.sf.late.app.duration 8333333
 resetprop -n debug.sf.late.sf.duration 8333333
+
+# Allow swap to reach 100% before triggering low memory killer
+resetprop -n ro.lmk.swap_free_low_percentage 0
