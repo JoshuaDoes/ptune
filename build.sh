@@ -12,7 +12,7 @@ popd () {
 }
 
 echo "* Configuring the build environment"
-export VER="v1.1.2"
+export VER="v1.1.3"
 export ZIP="ptune-$VER.zip"
 export SRCMOD="$PWD/module"
 

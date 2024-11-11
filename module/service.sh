@@ -10,7 +10,10 @@ VSG=$VS/groups
 CF=/sys/devices/system/cpu/cpufreq
 
 # Wait for successful boot
-while [ "$(getprop sys.boot_completed | tr -d '\r')" != "1" ]; do sleep 1; done
+if [ "$(dirname $0)" == "/data/adb/service.d" ]; then
+  echo "Waiting"
+  while [ "$(getprop sys.boot_completed | tr -d '\r')" != "1" ]; do sleep 1; done
+fi
 
 # Adjust our kernel's tunables
 echo 0 > $VM/dirty_writeback_centisecs
