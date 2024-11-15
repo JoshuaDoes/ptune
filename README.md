@@ -84,6 +84,8 @@ Source code: [GitHub Repository for Pixel Tune](https://github.com/JoshuaDoes/pt
 
 ## Support and Feedback
 
+Telegram support chat: [JoshuaDoesAndroidPlus](https://joshuado.es/telegram)
+
 Discord: @joshuadoes
 
 Telegram: [JoshuaDoes](https://t.me/JoshuaDoes)
