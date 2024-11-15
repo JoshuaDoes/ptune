@@ -70,7 +70,7 @@ To uninstall this module safely, just uninstall it like any other module and reb
 
 ### WARNING
 
-Your device WILL bootloop once after you uninstall this module. Magisk waits to run uninstall scripts until after a reboot, and we can't just hot reload boot nor the kernel once we unpatch the boot image. Thus, the only solution is a hard reset.
+Your device WILL bootloop exactly once after you uninstall this module using Magisk Manager. Magisk waits to run uninstall scripts until after a reboot, and we can't just hot reload boot nor the kernel once we unpatch the boot image. Thus, the only solution is an instant reboot. This will only happen once, and then boot will proceed as normal!
 
 A fun fact about this, during development I accidentally softlocked myself out of ever being able to run Magisk without factory resetting because the forced reboot meant Magisk didn't complete the uninstall. This resulted in an effective bootloop if I flashed Magisk at all. My fix was to install KSU because it would wipe the modules for me on boot so that it could replace Magisk - but this is how I unfortunately learned that KSU is not compatible until they have a custom init like Magisk does. And the bugfix was to simply forcefully remove the module before the hard reset. (Oopsie, lmao)
 
