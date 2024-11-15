@@ -78,5 +78,5 @@ resetprop -n debug.sf.earlyGl.sf.duration 8333333
 resetprop -n debug.sf.late.app.duration 8333333
 resetprop -n debug.sf.late.sf.duration 8333333
 
-# Allow swap to reach 100% before triggering low memory killer
-resetprop -n ro.lmk.swap_free_low_percentage 0
+# Allow swap to reach 99% before triggering low memory killer
+resetprop -n ro.lmk.swap_free_low_percentage 1
