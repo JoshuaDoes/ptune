@@ -61,7 +61,7 @@ cp /dev/block/bootdevice/by-name/boot$SLOT $BOOT
 
 echo "* Unpacking boot$SLOT"
 rm boot-new.img header kernel ramdisk.cpio >/dev/null 2>&1
-magiskboot unpack -h $BOOT
+magiskboot unpack -h $BOOT >/dev/null 2>&1
 
 echo "* Adjusting ramdisk"
 cd ramdisk
@@ -73,18 +73,19 @@ do
   fi
   DIR="${d#./}"
   echo "- $DIR"
-  magiskboot cpio ../ramdisk.cpio "mkdir 0700 $DIR" >/dev/null 2>&1
+  magiskboot cpio ../ramdisk.cpio "mkdir 0777 $DIR" >/dev/null 2>&1
 done
 for f in $(find . -type f)
 do
   FILE="${f#./}"
   echo "- $FILE"
+  magiskboot cpio ../ramdisk.cpio "rm $FILE" >/dev/null 2>&1
   magiskboot cpio ../ramdisk.cpio "add 0777 $FILE $FILE" >/dev/null 2>&1
 done
 unset IFS; set +f
 cd ..
 
-magiskboot cpio ramdisk.cpio "rm overlay.d/joshuax.rc" #v1.0.0
+magiskboot cpio ramdisk.cpio "rm overlay.d/joshuax.rc" >/dev/null 2>&1 #v1.0.0
 
 echo "* Repacking boot$SLOT"
 magiskboot repack $BOOT boot-new.img

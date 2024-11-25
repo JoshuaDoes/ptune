@@ -1,35 +1,10 @@
 on early-init
-    ## Enable the system cpuset
     mkdir /dev/cpuset/system
     chown system system /dev/cpuset/system/tasks
     chmod 0664 /dev/cpuset/system/tasks
-    write /dev/cpuset/system/mems 0
-
-    ## Support stune, this might get backported by someone
-    mkdir /dev/stune/system
-    chown system system /dev/stune/system
-    chown system system /dev/stune/system/tasks
-    chown system system /dev/stune/system/cgroup.procs
-    chmod 0664 /dev/stune/system/tasks
-    chmod 0664 /dev/stune/system/cgroup.procs
-
-    ## Support cpuctl
-    mkdir /dev/cpuctl/system
-    chown system system /dev/cpuctl/system
-    chown system system /dev/cpuctl/system/tasks
-    chown system system /dev/cpuctl/system/cgroup.procs
-    chmod 0664 /dev/cpuctl/system/tasks
-    chmod 0664 /dev/cpuctl/system/cgroup.procs
-
-    ## Support gs101, gs201, gs401
     write /dev/cpuset/system/cpus 0-7
-    write /dev/cpuset/top-app/cpus 0-7
-
-    ## Support gs301
     write /dev/cpuset/system/cpus 0-8
-    write /dev/cpuset/top-app/cpus 0-8
-
-# # #    SOFTWARE    # # #
+    write /dev/cpuset/system/mems 0
 
 # Zygote64
 service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-system-server --socket-name=zygote
@@ -48,7 +23,6 @@ service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-s
     onrestart restart netd
     onrestart restart wificond
     critical window=${zygote.critical_window.minute:-off} target=zygote-fatal
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -63,7 +37,6 @@ service zygote_secondary /system/bin/app_process32 -Xzygote /system/bin --zygote
     socket zygote_secondary stream 660 root system
     socket usap_pool_secondary stream 660 root system
     onrestart restart zygote
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -85,7 +58,6 @@ service servicemanager /system/bin/servicemanager
     onrestart class_restart --only-enabled hal
     onrestart class_restart --only-enabled early_hal
     shutdown critical
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -97,7 +69,6 @@ service vendor.power-hal-aidl /vendor/bin/hw/android.hardware.power-service.pixe
     class hal
     user root
     group system
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -115,8 +86,7 @@ service audioserver /system/bin/audioserver
     onrestart restart vendor.audio-effect-hal-aidl
     onrestart restart vendor.audio-hal-4-0-msd
     onrestart restart audio_proxy_service
-    task_profiles ProcessCapacityHigh HighPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -127,11 +97,10 @@ service cameraserver /system/bin/cameraserver
     class main
     user cameraserver
     group audio camera input drmrpc
-    task_profiles CameraServiceCapacity MaxPerformance
     capabilities SYS_NICE
     onrestart class_restart cameraWatchdog
     interface aidl android.frameworks.cameraservice.service.ICameraService/default
-    ioprio rt 4
+    ioprio rt 1
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -154,8 +123,7 @@ service mediaextractor /system/bin/mediaextractor
     class main
     user mediaex
     group drmrpc mediadrm
-    task_profiles ProcessCapacityHigh MaxPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -166,8 +134,7 @@ service media /system/bin/mediaserver
     class main
     user media
     group audio camera inet net_bt net_bt_admin net_bw_acct drmrpc mediadrm
-    task_profiles ProcessCapacityHigh MaxPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -183,7 +150,6 @@ service surfaceflinger /system/bin/surfaceflinger
     socket pdx/system/vr/display/client     stream 0666 system graphics u:object_r:pdx_display_client_endpoint_socket:s0
     socket pdx/system/vr/display/manager    stream 0666 system graphics u:object_r:pdx_display_manager_endpoint_socket:s0
     socket pdx/system/vr/display/vsync      stream 0666 system graphics u:object_r:pdx_display_vsync_endpoint_socket:s0
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -249,7 +215,6 @@ service update_engine /system/bin/update_engine --logtostderr --logtofile --fore
     class late_start
     user root
     group root system wakelock inet cache media_rw
-    task_profiles OtaProfiles
     disabled
     ioprio rt 0
     rlimit rtprio 10 10
@@ -271,8 +236,7 @@ service update_verifier /system/bin/update_verifier
 service gatekeeperd /system/bin/gatekeeperd /data/misc/gatekeeper
     class late_start
     user system
-    task_profiles ProcessCapacityHigh MaxPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -283,8 +247,7 @@ service keystore2 /system/bin/keystore2 /data/misc/keystore
     class early_hal
     user keystore
     group keystore readproc log
-    task_profiles ProcessCapacityHigh MaxPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -295,21 +258,17 @@ service credstore /system/bin/credstore /data/misc/credstore
     class core
     user credstore
     group credstore
-    task_profiles ProcessCapacityHigh MaxPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
     writepid /dev/cpuset/system/tasks
-
-# # #    HARDWARE    # # #
 
 # AOC
 service aocd /vendor/bin/aocd
     class late_start
     user root
     group root system audio
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -321,7 +280,6 @@ service aocxd /vendor/bin/aocxd
     class late_start
     user root
     group root system audio
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -335,8 +293,7 @@ service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
     group audio camera drmrpc inet media mediadrm net_bt net_bt_admin net_bw_acct wakelock context_hub system
     capabilities BLOCK_SUSPEND SYS_NICE
     onrestart restart audioserver
-    task_profiles ProcessCapacityHigh HighPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -348,7 +305,6 @@ service twoshay /vendor/bin/twoshay -s
     user root
     group input
     disabled
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -360,7 +316,6 @@ service vendor.fingerprint-goodix /vendor/bin/hw/android.hardware.biometrics.fin
     class late_start
     user system
     group system input
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -389,7 +344,6 @@ service edgetpu_vendor_service /vendor/bin/hw/vendor.google.edgetpu_vendor_servi
     class hal
     user radio
     group radio system
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -402,7 +356,6 @@ service vendor.graphics.allocator-default /vendor/bin/hw/android.hardware.graphi
     user system
     group graphics drmrpc
     capabilities SYS_NICE
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -416,7 +369,6 @@ service vendor.hwcomposer-3 /vendor/bin/hw/android.hardware.composer.hwc3-servic
     group graphics drmrpc
     capabilities SYS_NICE
     onrestart restart surfaceflinger
-    task_profiles ProcessCapacityHigh MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -430,8 +382,7 @@ service ril-daemon /vendor/bin/hw/rild_exynos
     group radio cache inet misc audio log readproc wakelock
     capabilities BLOCK_SUSPEND NET_ADMIN NET_RAW
     seclabel u:r:rild:s0
-    task_profiles ProcessCapacityHigh MaxPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -444,8 +395,7 @@ service cpboot-daemon /vendor/bin/cbd -d -t ${ro.vendor.cbd.modem_type} -P by-na
     group radio system cache inet misc audio sdcard_rw log
     capabilities BLOCK_SUSPEND NET_ADMIN NET_RAW SYSLOG
     seclabel u:r:cbd:s0
-    task_profiles ProcessCapacityHigh MaxPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -461,8 +411,7 @@ service wpa_supplicant /vendor/bin/hw/wpa_supplicant \
     user root
     disabled
     oneshot
-    task_profiles ProcessCapacityHigh MaxPerformance
-    ioprio rt 4
+    ioprio rt 0
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
