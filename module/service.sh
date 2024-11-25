@@ -18,11 +18,13 @@ blocksched() {
 }
 
 perfsched() {
-  g="$VSG/$3"
+  g="$VSG/$4"
   chmod 200 "$g/prefer_high_cap"
+  chmod 200 "$g/prefer_idle"
   chmod 200 "$g/uclamp_max"
   echo "$1" > "$g/uclamp_max"
   echo "$2" > "$g/prefer_high_cap"
+  echo "$3" > "$g/prefer_idle"
 }
 
 # Wait for successful boot to run the rest
@@ -46,16 +48,16 @@ blocksched none sdd
 # Allow vendor scheduler groups to migrate to any core if cpuset allows
 echo "2048 2048 2048" > $VS/util_threshold
 
-# Prefer things on big
-perfsched 1024 0 cam
-perfsched 1024 0 cam_power
-perfsched 1024 0 dex2oat
-perfsched 1024 0 fg
-perfsched 1024 0 ota
-perfsched 1024 1 rt
-perfsched 1024 1 sf
-perfsched 1024 0 sys
-perfsched 1024 0 ta
+# Prefer running on big versus prefer to idle
+perfsched 1024 1 0 cam
+perfsched 1024 0 0 cam_power
+perfsched 1024 0 1 dex2oat
+perfsched 1024 0 1 fg
+perfsched 1024 0 1 ota
+perfsched 1024 1 1 rt
+perfsched 1024 1 1 sf
+perfsched 1024 1 1 sys
+perfsched 1024 0 1 ta
 
 # Disable SurfaceFlinger frame dropping, no but for real
 resetprop -d debug.sf.use_phase_offsets_as_durations
