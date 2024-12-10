@@ -29,20 +29,6 @@ service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-s
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Zygote32
-service zygote_secondary /system/bin/app_process32 -Xzygote /system/bin --zygote --socket-name=zygote_secondary --enable-lazy-preload
-    class main
-    user root
-    group root readproc reserved_disk
-    socket zygote_secondary stream 660 root system
-    socket usap_pool_secondary stream 660 root system
-    onrestart restart zygote
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
 # Service manager
 service servicemanager /system/bin/servicemanager
     class core animation
@@ -79,14 +65,14 @@ service vendor.power-hal-aidl /vendor/bin/hw/android.hardware.power-service.pixe
 service audioserver /system/bin/audioserver
     class core
     user audioserver
-    group audio camera drmrpc media mediadrm net_bt net_bt_admi>
+    group audio camera drmrpc media mediadrm net_bt net_bt_admin net_bw_acct wakelock
     capabilities BLOCK_SUSPEND
     onrestart restart vendor.audio-hal
     onrestart restart vendor.audio-hal-aidl
     onrestart restart vendor.audio-effect-hal-aidl
     onrestart restart vendor.audio-hal-4-0-msd
     onrestart restart audio_proxy_service
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -100,7 +86,7 @@ service cameraserver /system/bin/cameraserver
     capabilities SYS_NICE
     onrestart class_restart cameraWatchdog
     interface aidl android.frameworks.cameraservice.service.ICameraService/default
-    ioprio rt 1
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -112,7 +98,7 @@ service usbd /system/bin/usbd
     oneshot
     user root
     group root usb system
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -123,7 +109,18 @@ service mediaextractor /system/bin/mediaextractor
     class main
     user mediaex
     group drmrpc mediadrm
-    ioprio rt 0
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Media metrics
+service mediametrics /system/bin/mediametrics
+    class main
+    user media
+    group media
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -134,7 +131,7 @@ service media /system/bin/mediaserver
     class main
     user media
     group audio camera inet net_bt net_bt_admin net_bw_acct drmrpc mediadrm
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -147,9 +144,6 @@ service surfaceflinger /system/bin/surfaceflinger
     group graphics drmrpc readproc
     capabilities SYS_NICE
     onrestart restart --only-if-running zygote
-    socket pdx/system/vr/display/client     stream 0666 system graphics u:object_r:pdx_display_client_endpoint_socket:s0
-    socket pdx/system/vr/display/manager    stream 0666 system graphics u:object_r:pdx_display_manager_endpoint_socket:s0
-    socket pdx/system/vr/display/vsync      stream 0666 system graphics u:object_r:pdx_display_vsync_endpoint_socket:s0
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -161,7 +155,7 @@ service installd /system/bin/installd
     class main
     user root
     capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER FSETID KILL SETGID SETUID SYS_ADMIN
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -177,7 +171,7 @@ service apexd /system/bin/apexd
     disabled
     reboot_on_failure reboot,apexd-failed
     capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER SYS_ADMIN
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -191,7 +185,7 @@ service apexd-bootstrap /system/bin/apexd --bootstrap
     disabled
     reboot_on_failure reboot,bootloader,bootstrap-apexd-failed
     capabilities SYS_ADMIN
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -204,7 +198,7 @@ service apexd-snapshotde /system/bin/apexd --snapshotde
     oneshot
     disabled
     capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -216,7 +210,7 @@ service update_engine /system/bin/update_engine --logtostderr --logtofile --fore
     user root
     group root system wakelock inet cache media_rw
     disabled
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -226,7 +220,7 @@ service update_engine /system/bin/update_engine --logtostderr --logtofile --fore
 service update_verifier /system/bin/update_verifier
     user root
     group cache system
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -236,7 +230,7 @@ service update_verifier /system/bin/update_verifier
 service gatekeeperd /system/bin/gatekeeperd /data/misc/gatekeeper
     class late_start
     user system
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -247,7 +241,7 @@ service keystore2 /system/bin/keystore2 /data/misc/keystore
     class early_hal
     user keystore
     group keystore readproc log
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -258,11 +252,13 @@ service credstore /system/bin/credstore /data/misc/credstore
     class core
     user credstore
     group credstore
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
     writepid /dev/cpuset/system/tasks
+
+### Pixel specific
 
 # AOC
 service aocd /vendor/bin/aocd
@@ -293,7 +289,7 @@ service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
     group audio camera drmrpc inet media mediadrm net_bt net_bt_admin net_bw_acct wakelock context_hub system
     capabilities BLOCK_SUSPEND SYS_NICE
     onrestart restart audioserver
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -340,10 +336,7 @@ service edgetpu_vendor_service /vendor/bin/hw/vendor.google.edgetpu_vendor_servi
     disabled
     oneshot
     user system
-    group systemservice vendor.google.radioext@1.0 /vendor/bin/hw/vendor.google.radioext@1.0-service
-    class hal
-    user radio
-    group radio system
+    group system
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -351,7 +344,7 @@ service edgetpu_vendor_service /vendor/bin/hw/vendor.google.edgetpu_vendor_servi
     writepid /dev/cpuset/system/tasks
 
 # Graphics allocator
-service vendor.graphics.allocator-default /vendor/bin/hw/android.hardware.graphics.allocator-V1-service
+service vendor.graphics.allocator-default /vendor/bin/hw/android.hardware.graphics.allocator-V2-service
     class hal animation
     user system
     group graphics drmrpc
@@ -382,7 +375,7 @@ service ril-daemon /vendor/bin/hw/rild_exynos
     group radio cache inet misc audio log readproc wakelock
     capabilities BLOCK_SUSPEND NET_ADMIN NET_RAW
     seclabel u:r:rild:s0
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -395,7 +388,7 @@ service cpboot-daemon /vendor/bin/cbd -d -t ${ro.vendor.cbd.modem_type} -P by-na
     group radio system cache inet misc audio sdcard_rw log
     capabilities BLOCK_SUSPEND NET_ADMIN NET_RAW SYSLOG
     seclabel u:r:cbd:s0
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
@@ -411,7 +404,7 @@ service wpa_supplicant /vendor/bin/hw/wpa_supplicant \
     user root
     disabled
     oneshot
-    ioprio rt 0
+    ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
