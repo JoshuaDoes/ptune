@@ -1,7 +1,7 @@
 id=ptune
 name=Pixel Tune
-version=v1.3.0
-versionCode=130
+version=v1.4.0
+versionCode=140
 author=JoshuaDoes
-description=Installs a new system cpuset to allow more breathing room for core system services and HALs. Must be reinstalled using the Magisk button labelled 'Action' after kernel or Magisk updates!
+description=Installs a new system cpuset to allow more breathing room for core system services and HALs. Must be reinstalled using the Magisk button labelled 'Action' after any updates to your boot image! Must be uninstalled prior to OTAs if Magisk doesn't live in boot (as is the case on Pixel 7 series and newer). Uninstalls are safe, read the README!
 updateJson=https://raw.githubusercontent.com/JoshuaDoes/ptune/dev/update.json

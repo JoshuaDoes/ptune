@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export VER="v1.3.0"
+export VER="v1.4.0"
 export ZIP="ptune-$VER.zip"
 export SRCMOD="$PWD/module"
 

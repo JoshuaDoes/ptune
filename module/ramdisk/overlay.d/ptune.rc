@@ -368,6 +368,35 @@ service vendor.hwcomposer-3 /vendor/bin/hw/android.hardware.composer.hwc3-servic
     priority -20
     writepid /dev/cpuset/system/tasks
 
+# Camera Provider
+service vendor.camera-provider-2-7-google /apex/com.google.pixel.camera.hal/bin/hw/android.hardware.camera.provider@2.7-service-google
+    class hal cameraWatchdog
+    user system
+    group system
+    namespace mnt
+    capabilities SYS_NICE
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Virtual Camera
+service virtual_camera /system/bin/virtual_camera
+    class core
+    user system
+    group system
+    capabilities SYS_NICE
+    interface aidl virtual_camera
+    interface aidl android.hardware.camera.provider.ICameraProvider/virtual/0
+    oneshot
+    disabled
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
 # RIL
 service ril-daemon /vendor/bin/hw/rild_exynos
     class main
