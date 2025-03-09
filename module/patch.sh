@@ -19,10 +19,9 @@ echo ""
 DEVICES="raven oriole bluejay cheetah panther lynx felix tangorpro husky shiba akita caiman komodo comet tokay"
 
 echo "# Supported releases"
-echo "Android 14"
 echo "Android 15"
 echo ""
-RELEASES="14 15"
+RELEASES="15"
 
 DEVICE="$(getprop ro.product.device)"
 DEVICE_FOUND=0

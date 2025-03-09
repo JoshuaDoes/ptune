@@ -1,5 +1,5 @@
 YOU CANNOT DOWNLOAD THIS UPDATE THROUGH MAGISK'S IN-APP MODULE UPDATER.
 
-You can read the changelog and install this new update here:
+You can read the changelog and install this new update using the link below:
 
-[Release v1.4.0](https://github.com/JoshuaDoes/ptune/releases/tag/140)
+[Pixel Tune - Release v1.5.0](https://github.com/JoshuaDoes/ptune/releases/tag/150)

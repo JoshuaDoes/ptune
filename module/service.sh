@@ -105,30 +105,30 @@ echo "2048 2048 2048 2048 2048 2048 2048 2048" > $VS/util_threshold
 # prefer idle
 # task spread
 schedgroup bg        0     158 0 1 1 #0 158
-schedgroup cam       0    1024 0 0 0 #0 1024 (?¿?)
-schedgroup cam_power 0    1024 0 0 0 #0 1024 (?¿?)
+schedgroup cam       0    1024 0 1 0 #0 1024 (?¿?)
+schedgroup cam_power 0    1024 0 1 0 #0 1024 (?¿?)
 schedgroup dex2oat   0    1024 0 1 0 #0 1024 (?¿?)
-schedgroup fg        0     490 0 1 0 #0 490
-schedgroup fg_wi     0    1024 0 1 0 #0 757 (?¿?)
+schedgroup fg        0    1024 0 1 0 #0 490
+schedgroup fg_wi     0     490 0 1 0 #0 757 (?¿?)
 schedgroup nnapi     0    1024 0 1 0 #0 1024 (?¿?)
 schedgroup ota       0    1024 0 1 0 #0 1024 (?¿?)
 schedgroup rt        0     158 0 1 1 #0 158
-schedgroup sf        0     158 0 1 1 #0 490 (?¿?)
+schedgroup sf        0    1024 0 1 0 #0 490 (?¿?)
 schedgroup sys       0    1024 0 1 0 #0 490 (?¿?)
-schedgroup sys_bg    0     158 0 1 1 #0 158
+schedgroup sys_bg    0     490 0 1 0 #0 158
 schedgroup ta        0    1024 0 1 0 #0 1024
 
 # cpuset | cpus
 cpuset background                   0-3 #0-3
 cpuset camera-daemon                0-7 #0-7 (?¿?)
-cpuset camera-daemon-high-group     6-7 #0-7 (?¿?)
-cpuset camera-daemon-mid-group      4-5 #0-7 (?¿?)
-cpuset camera-daemon-mid-high-group 4-7 #0-7 (?¿?)
-cpuset foreground                   0-5 #0-5
-cpuset foreground_window            0-7 #0-6
+cpuset camera-daemon-high-group     0-7 #0-7 (?¿?)
+cpuset camera-daemon-mid-group      0-7 #0-7 (?¿?)
+cpuset camera-daemon-mid-high-group 0-7 #0-7 (?¿?)
+cpuset foreground                   0-7 #0-5
+cpuset foreground_window            0-5 #0-6
 cpuset restricted                   0-3 #0-3
 cpuset system                       0-7 #0-7 (custom, !sys)
-cpuset system-background            0-3 #0-3
+cpuset system-background            0-5 #0-3
 cpuset top-app                      0-7 #0-7
 
 # Give our CPU a lunch break when it wants one
@@ -137,7 +137,7 @@ delayfreqs 0 0 #5000 0
 # adpf rampup multiplier
 # latency in nanoseconds
 # reduce prefer idle
-sched 1 4166666 1 #2 8000000 1
+sched 1 4166666 0 #2 8000000 0
 
 # Speed up disk access
 # async depth
@@ -153,7 +153,7 @@ echo 1 > $VM/swappiness
 echo 5 > $VM/vfs_cache_pressure
 echo 1 > $KR/sched_child_runs_first
 
-# Allow swap to reach 97% before triggering low memory killer
+# Allow swap to reach 97% before triggering LMKD
 resetprop -n ro.lmk.swap_free_low_percentage 3
 
 # Disable SurfaceFlinger frame dropping, no but for real
@@ -165,6 +165,16 @@ resetprop -d debug.sf.early.app.duration
 resetprop -d debug.sf.earlyGl.sf.duration
 resetprop -d debug.sf.earlyGl.app.duration
 resetprop -d debug.sf.frame_rate_multiple_threshold
+
+# Raise the frequency of sampling regions in SurfaceFlinger
+## Defaults: 3000000, 200000000, 200000000
+resetprop -n debug.sf.region_sampling_duration_ns 4166666
+resetprop -n debug.sf.region_sampling_period_ns 99999984
+resetprop -n debug.sf.region_sampling_timer_timeout_ns 99999984
+
+# Restart SurfaceFlinger to take in the new values
+## Unfortunately increases boot time, need to set earlier in init before SF
+killall -9 surfaceflinger
 
 }
 

@@ -1,10 +1,18 @@
+# ptune.rc by JoshuaDoes for use with Pixel Tune
+# Careful with your changes!
+
+### INIT STAGES ###
+
 on early-init
+    # Initialize our system cpuset
     mkdir /dev/cpuset/system
     chown system system /dev/cpuset/system/tasks
     chmod 0664 /dev/cpuset/system/tasks
     write /dev/cpuset/system/cpus 0-7
     write /dev/cpuset/system/cpus 0-8
     write /dev/cpuset/system/mems 0
+
+### SERVICES ###
 
 # Zygote64
 service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-system-server --socket-name=zygote
