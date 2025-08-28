@@ -1,9 +1,5 @@
 ## WARNINGS
 
-# !!!!! DO NOT FLASH ON BETA VERSIONS OF ANDROID 15 !!!!!
-
-# !!!!! ANDROID 15 BETAS ARE TECHNICALLY ANDROID 16, AND THEY CHANGE THE SERVICES WE PATCH !!!!!
-
 ### It goes without saying, your decision to use this module comes with risks. For example, your ambient and loaded temperatures may be different, your device may experience new types of never seen before levels of lag, and system services may behave in profoundly illegitimate ways. My phone hasn't blown up yet, but that doesn't mean it won't. (My phone is still fine, yours should be too.)
 
 ### If you wish to use this module, please provide feedback! It will be most helpful if you can provide as many details as possible, such as the differences you notice between the stock performance and my altered performance, the environmental conditions you are in, if you are noticing increased heating compared to before, etc. The goal is to make sure these are truly the best values, and once confirmed, to submit these new values to as many custom ROMs as possible for their new default values.
@@ -20,30 +16,54 @@
 
 ### MAGISK IS *REQUIRED*, NO IFS ANDS OR BUTS ABOUT IT!
 
-So far this module is only compatible with Pixel 6 (Tensor G1), Pixel 7 (Tensor G2), Pixel 8 (Tensor G3) and Pixel 9 (Tensor G4) series devices. This is due to the nature of the patches we are applying.
+So far this module is only compatible with Pixel 6 (Tensor G1), Pixel 7 (Tensor G2), Pixel 8 (Tensor G3), Pixel 9 (Tensor G4), and Pixel 10 (Tensor G5) series devices, with potential future support for Pixel 11 and 12 series devices included. This is due to the nature of the patches we are applying.
 
-Additionally, for best compatibility you should be running hentaiOS/helluvaOS based on Android 15, or any other ROM that stays true to Pixel stock in the device tree. Other ROMs might need changes made for support, and you are on your own if you fall into this case.
+Additionally, for best compatibility you should be running hentaiOS/helluvaOS based on Android 15 or the initial Google stock release based on Android 16, or any other ROM that stays true to Pixel stock in the device tree and is a supported Android base.
+
+Other ROMs might need changes made for support, and you are on your own if you fall into this case.
 
 Just to be clear:
+
+### Supported releases of Android
+
+```
+# Android 15
+# Android 16
+```
 
 ### Supported devices
 
 ```
-# raven     = Pixel 6 Pro
-# oriole    = Pixel 6
-# bluejay   = Pixel 6a
-# cheetah   = Pixel 7 Pro
-# panther   = Pixel 7
-# lynx      = Pixel 7a
-# felix     = Pixel Fold
-# tangorpro = Pixel Tablet
-# husky     = Pixel 8 Pro
-# shiba     = Pixel 8
-# akita     = Pixel 8a
-# caiman    = Pixel 9 Pro
-# komodo    = Pixel 9 Pro XL
-# comet     = Pixel 9 Pro Fold
-# tokay     = Pixel 9
+# raven      = Pixel 6 Pro
+# oriole     = Pixel 6
+# bluejay    = Pixel 6a
+# cheetah    = Pixel 7 Pro
+# panther    = Pixel 7
+# lynx       = Pixel 7a
+# felix      = Pixel Fold
+# tangorpro  = Pixel Tablet
+# husky      = Pixel 8 Pro
+# shiba      = Pixel 8
+# akita      = Pixel 8a
+# caiman     = Pixel 9 Pro
+# komodo     = Pixel 9 Pro XL
+# comet      = Pixel 9 Pro Fold
+# tokay      = Pixel 9
+# tegu       = Pixel 9a
+# blazer     = Pixel 10 Pro
+# mustang    = Pixel 10 Pro XL
+# rango      = Pixel 10 Pro Fold
+# frankel    = Pixel 10
+# stallion   = Pixel 10a
+# grizzly    = Pixel 11 Pro
+# kodiak     = Pixel 11 Pro XL
+# yogi       = Pixel 11 Pro Fold
+# cubs       = Pixel 11
+# formosan   = Pixel 11a
+# sasquatch  = Pixel 12 Pro
+# silverback = Pixel 12 Pro XL
+# capuchin   = Pixel 12 Pro Fold
+# galago     = Pixel 12
 ```
 
 ---
@@ -54,17 +74,21 @@ This module will patch your boot ramdisk to add a Magisk overlay.d script, which
 
 In addition, we are creating a new cpuset called `system` and allowing it access to every CPU core. Every service we patch now belongs to this cpuset, as previously the vast majority of them were restricted from accessing big cores. I believe this is helping to balance the overall load with the `top-app` cpuset, which means your little and mid cores won't have to boost so high when your primary app is at high loads - system can simply spread alongside the app on the big cores.
 
-Lastly, we're installing a Magisk service.d script that tunes a few different kernel tunables and adjusts some power HAL settings. For example we're making the power HAL aware that many services now have access to the big cores, and we're also setting the swappiness value to 1 so that zram is avoided until it's absolutely necessary (which avoids some unnecessary RAM overhead and frees CPU time).
+Lastly, we're installing a Magisk service.d script that tunes a few different kernel tunables and adjusts some power HAL settings. For example we're making the power HAL aware that many services now have access to the big cores, and we're also setting the swappiness value to 0 so that zram is avoided until it's absolutely necessary (which avoids some unnecessary RAM overhead and frees CPU time).
+
+Additionally, we recently added support to update the total size of the zram block device to equal that of the device's physical total RAM minus 1GB. For example, the Pixel 6 Pro with 12GB will now have 11GB of zram, effectively creating 23GB of RAM under lz44eh's max compression ratio of 2x - your mileage may vary.
 
 ## Installing
 
-For your very first time, just install it like any other module and reboot. However, every time you update your kernel or Magisk you will most likely need to reinstall.
+For your very first time, just install it like any other module and reboot. However, every time you update your ROM, you will most likely need to reinstall.
 
 While this module features a working uninstall script (see below), this is not how you should reinstall it! For that purpose, the action script (which is actually called by the install script) features the complete patch and install process for your convenience. Just open your modules list in Magisk and tap the `Action` button inside Pixel Tune's box, then reboot!
 
+For the sake of clarity, I will not be providing instructions for how to apply an OTA update while rooted. Just remember to use ptune's action button before you reboot into the new install, or you can delay this step until after you verify that the new install boots successfully without ptune injecting the init services.
+
 ## Uninstalling
 
-As mentioned earlier, this module features a working uninstall script. Because it also suppports reinstalls after boot updates, it uses the reverse of the patching logic to remove the patches regardless of other changes made since the install. No boot backups are ever used, so there is no risk of old restores.
+As mentioned earlier, this module features a working uninstall script. Because it also suppports reinstalls after boot updates, it uses the reverse of the patching logic to remove the patches, regardless of other changes made since the install. No boot backups are ever used, so there is no risk of old restores.
 
 To uninstall this module safely, just uninstall it like any other module and reboot.
 
@@ -72,7 +96,7 @@ To uninstall this module safely, just uninstall it like any other module and reb
 
 Your device WILL bootloop exactly once after you uninstall this module using Magisk Manager. Magisk waits to run uninstall scripts until after a reboot, and we can't just hot reload boot nor the kernel once we unpatch the boot image. Thus, the only solution is an instant reboot. This will only happen once, and then boot will proceed as normal!
 
-A fun fact about this, during development I accidentally softlocked myself out of ever being able to run Magisk without factory resetting because the forced reboot meant Magisk didn't complete the uninstall. This resulted in an effective bootloop if I flashed Magisk at all. My fix was to install KSU because it would wipe the modules for me on boot so that it could replace Magisk - but this is how I unfortunately learned that KSU is not compatible until they have a custom init like Magisk does. And the bugfix was to simply forcefully remove the module before the hard reset. (Oopsie, lmao)
+A fun fact about this: During development, I accidentally softlocked myself out of ever being able to run Magisk without factory resetting, because the forced reboot meant Magisk didn't complete the uninstall. This resulted in an effective bootloop if I tried booting with Magisk. My fix was to install KSU because it would wipe the modules for me on boot so that it could replace Magisk without causing any conflicts - but this is how I unfortunately learned that KSU is not compatible with ptune for the time being, at least not until they have a custom init like Magisk does. And the bugfix was to simply forcefully remove the module before the hard reset. (Oopsie, lmao)
 
 ## Downloads
 
@@ -94,17 +118,6 @@ Twitter: [@TheNotesOfJosh](https://twitter.com/TheNotesOfJosh)
 
 ## Donations
 
-If you enjoy the work I've done here, or any other projects I work on, please consider donating and leave a note with the projects that you used!
+All donations are appreciated and help me stay awake at night to work on this more. Even if it's not much, it helps more than not in the long run! You can even become a sponsor of me if you're okay with a recurring monthly charge.
 
-In order of preference:
-
-CashApp: $JoshuaDoes
-
-Chime: $JoshuaDoes
-
-PayPal: [JoshuaDoes](https://paypal.me/JoshuaDoes)
-
-Patreon: [JoshuaDoes](https://patreon.com/JoshuaDoes)
-
-Venmo: @JoshuaDoes
-
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/JoshuaDoes?style=for-the-badge&labelColor=%23FAFAFA&color=%231C1C1C)](https://github.com/sponsors/JoshuaDoes)

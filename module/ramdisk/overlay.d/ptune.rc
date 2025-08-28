@@ -23,6 +23,8 @@ service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-s
     socket usap_pool_primary stream 660 root system
     onrestart exec_background - system system -- /system/bin/vdc volume abort_fuse
     onrestart write /sys/power/state on
+    # NOTE: If the wakelock name here is changed, then also
+    # update it in SystemSuspend.cpp
     onrestart write /sys/power/wake_lock zygote_kwl
     onrestart restart audioserver
     onrestart restart cameraserver
@@ -31,6 +33,22 @@ service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-s
     onrestart restart netd
     onrestart restart wificond
     critical window=${zygote.critical_window.minute:-off} target=zygote-fatal
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Zygote64_32
+service zygote_secondary /system/bin/app_process32 -Xzygote /system/bin --zygote --socket-name=zygote_secondary --enable-lazy-preload
+    class main
+    user root
+    group root readproc reserved_disk
+    socket zygote_secondary stream 660 root system
+    socket usap_pool_secondary stream 660 root system
+    onrestart restart zygote
+    task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -52,17 +70,7 @@ service servicemanager /system/bin/servicemanager
     onrestart class_restart --only-enabled hal
     onrestart class_restart --only-enabled early_hal
     shutdown critical
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Power
-service vendor.power-hal-aidl /vendor/bin/hw/android.hardware.power-service.pixel-libperfmgr
-    class hal
-    user root
-    group system
+    task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -73,6 +81,7 @@ service vendor.power-hal-aidl /vendor/bin/hw/android.hardware.power-service.pixe
 service audioserver /system/bin/audioserver
     class core
     user audioserver
+    # media gid needed for /dev/fm (radio) and for /data/misc/media (tee)
     group audio camera drmrpc media mediadrm net_bt net_bt_admin net_bw_acct wakelock
     capabilities BLOCK_SUSPEND
     onrestart restart vendor.audio-hal
@@ -80,6 +89,7 @@ service audioserver /system/bin/audioserver
     onrestart restart vendor.audio-effect-hal-aidl
     onrestart restart vendor.audio-hal-4-0-msd
     onrestart restart audio_proxy_service
+    task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -94,295 +104,7 @@ service cameraserver /system/bin/cameraserver
     capabilities SYS_NICE
     onrestart class_restart cameraWatchdog
     interface aidl android.frameworks.cameraservice.service.ICameraService/default
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# USB
-service usbd /system/bin/usbd
-    class late_start
-    oneshot
-    user root
-    group root usb system
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Media extractor
-service mediaextractor /system/bin/mediaextractor
-    class main
-    user mediaex
-    group drmrpc mediadrm
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Media metrics
-service mediametrics /system/bin/mediametrics
-    class main
-    user media
-    group media
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Media server
-service media /system/bin/mediaserver
-    class main
-    user media
-    group audio camera inet net_bt net_bt_admin net_bw_acct drmrpc mediadrm
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# SurfaceFlinger
-service surfaceflinger /system/bin/surfaceflinger
-    class core animation
-    user system
-    group graphics drmrpc readproc
-    capabilities SYS_NICE
-    onrestart restart --only-if-running zygote
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Package installer
-service installd /system/bin/installd
-    class main
-    user root
-    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER FSETID KILL SETGID SETUID SYS_ADMIN
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# APEX installer
-service apexd /system/bin/apexd
-    interface aidl apexservice
-    class core
-    user root
-    group system
-    oneshot
-    disabled
-    reboot_on_failure reboot,apexd-failed
-    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER SYS_ADMIN
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# APEX bootstrapper
-service apexd-bootstrap /system/bin/apexd --bootstrap
-    user root
-    group system
-    oneshot
-    disabled
-    reboot_on_failure reboot,bootloader,bootstrap-apexd-failed
-    capabilities SYS_ADMIN
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# APEX snapshot manager
-service apexd-snapshotde /system/bin/apexd --snapshotde
-    user root
-    group system
-    oneshot
-    disabled
-    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Update engine
-service update_engine /system/bin/update_engine --logtostderr --logtofile --foreground
-    class late_start
-    user root
-    group root system wakelock inet cache media_rw
-    disabled
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Update verifier
-service update_verifier /system/bin/update_verifier
-    user root
-    group cache system
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Gatekeeper
-service gatekeeperd /system/bin/gatekeeperd /data/misc/gatekeeper
-    class late_start
-    user system
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Keystore
-service keystore2 /system/bin/keystore2 /data/misc/keystore
-    class early_hal
-    user keystore
-    group keystore readproc log
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Credstore
-service credstore /system/bin/credstore /data/misc/credstore
-    class core
-    user credstore
-    group credstore
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-### Pixel specific
-
-# AOC
-service aocd /vendor/bin/aocd
-    class late_start
-    user root
-    group root system audio
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# AOCX
-service aocxd /vendor/bin/aocxd
-    class late_start
-    user root
-    group root system audio
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Audio
-service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
-    class hal
-    user audioserver
-    group audio camera drmrpc inet media mediadrm net_bt net_bt_admin net_bw_acct wakelock context_hub system
-    capabilities BLOCK_SUSPEND SYS_NICE
-    onrestart restart audioserver
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# TwoShay
-service twoshay /vendor/bin/twoshay -s
-    class hal
-    user root
-    group input
-    disabled
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Fingerprint
-service vendor.fingerprint-goodix /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix
-    class late_start
-    user system
-    group system input
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Citadel
-service vendor.citadeld /vendor/bin/hw/citadeld
-    class early_hal
-    user hsm
-    group hsm
-    disabled
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# EdgeTPU
-service edgetpu_vendor_service /vendor/bin/hw/vendor.google.edgetpu_vendor_service@1.0-service
-    interface aidl com.google.edgetpu.IEdgeTpuVendorService/default
-    disabled
-    oneshot
-    user system
-    group system
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Graphics allocator
-service vendor.graphics.allocator-default /vendor/bin/hw/android.hardware.graphics.allocator-V2-service
-    class hal animation
-    user system
-    group graphics drmrpc
-    capabilities SYS_NICE
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# HWC
-service vendor.hwcomposer-3 /vendor/bin/hw/android.hardware.composer.hwc3-service.pixel
-    class hal animation
-    user system
-    group graphics drmrpc
-    capabilities SYS_NICE
-    onrestart restart surfaceflinger
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Camera Provider
-service vendor.camera-provider-2-7-google /apex/com.google.pixel.camera.hal/bin/hw/android.hardware.camera.provider@2.7-service-google
-    class hal cameraWatchdog
-    user system
-    group system
-    namespace mnt
-    capabilities SYS_NICE
+    task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -399,6 +121,367 @@ service virtual_camera /system/bin/virtual_camera
     interface aidl android.hardware.camera.provider.ICameraProvider/virtual/0
     oneshot
     disabled
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# USB
+service usbd /system/bin/usbd
+    class late_start
+    oneshot
+    user root
+    group root usb system
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Media extractor
+service mediaextractor /system/bin/mediaextractor
+    class main
+    user mediaex
+    group drmrpc mediadrm
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Media metrics
+service mediametrics /system/bin/mediametrics
+    class main
+    user media
+    group media
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Media server
+service media /system/bin/mediaserver
+    class main
+    user media
+    group audio camera inet net_bt net_bt_admin net_bw_acct drmrpc mediadrm
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# SurfaceFlinger
+service surfaceflinger /system/bin/surfaceflinger
+    class core animation
+    user system
+    group graphics drmrpc readproc
+    capabilities SYS_NICE
+    onrestart restart --only-if-running zygote
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Package installer
+service installd /system/bin/installd
+    class main
+    user root
+    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER FSETID KILL SETGID SETUID SYS_ADMIN
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# APEX installer
+service apexd /system/bin/apexd
+    interface aidl apexservice
+    class core
+    user root
+    group system
+    oneshot
+    disabled # does not start with the core class
+    reboot_on_failure reboot,apexd-failed
+    # CAP_CHOWN, CAP_DAC_OVERRIDE, CAP_DAC_READ_SEARCH required for apexdata snapshot & restore
+    # CAP_SYS_ADMIN is required to access device-mapper and to use mount syscall
+    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER SYS_ADMIN
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# APEX daemon (bootstrapper)
+service apexd-bootstrap /system/bin/apexd --bootstrap
+    user root
+    group system
+    oneshot
+    disabled
+    reboot_on_failure reboot,bootloader,bootstrap-apexd-failed
+    # CAP_SYS_ADMIN is required to access device-mapper and to use mount syscall
+    # apexd-bootstrap doesn't manage apexdata snapshot & restore, hence no need for other capabilities.
+    capabilities SYS_ADMIN
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# APEX manager (snapshot & restore)
+service apexd-snapshotde /system/bin/apexd --snapshotde
+    user root
+    group system
+    oneshot
+    disabled
+    # CAP_CHOWN, CAP_DAC_OVERRIDE, CAP_DAC_READ_SEARCH required for apexdata snapshot & restore
+    # apexd-snapshotde doesn't mount APEXes, hence no need for SYS_ADMIN capability
+    capabilities CHOWN DAC_OVERRIDE DAC_READ_SEARCH FOWNER
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Update engine
+service update_engine /system/bin/update_engine --logtostderr --logtofile --foreground
+    class late_start
+    user root
+    group root system wakelock inet cache media_rw
+    disabled
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Update verifier
+service update_verifier /system/bin/update_verifier
+    user root
+    group cache system
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Gatekeeper
+service gatekeeperd /system/bin/gatekeeperd /data/misc/gatekeeper
+    class late_start
+    user system
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Keystore
+service keystore2 /system/bin/keystore2 /data/misc/keystore
+    class early_hal
+    user keystore
+    group keystore readproc log
+    # Reboot to bootloader if Keystore crashes more than 4 times before `sys.boot_completed`.
+    critical window=0
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Credstore
+service credstore /system/bin/credstore /data/misc/credstore
+    class core
+    user credstore
+    group credstore
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+### Pixel specific
+
+# Power
+service vendor.power-hal-aidl /vendor/bin/hw/android.hardware.power-service.pixel-libperfmgr
+    class hal
+    user root
+    group system
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# AOC
+service aocd /vendor/bin/aocd
+    class late_start
+    user root
+    group root system audio
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# AOCX
+service aocxd /vendor/bin/aocxd
+    class late_start
+    user root
+    group root system audio
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Audio
+service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
+    class hal
+    user audioserver
+    # media gid needed for /dev/fm (radio) and for /data/misc/media (tee)
+    group audio camera drmrpc inet media mediadrm net_bt net_bt_admin net_bw_acct wakelock context_hub system
+    capabilities BLOCK_SUSPEND SYS_NICE
+    onrestart restart audioserver
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# TwoShay
+service twoshay /vendor/bin/twoshay -s
+    class hal
+    user root
+    group input
+    disabled
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Fingerprint
+service vendor.fingerprint-goodix /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix
+    class late_start
+    user system
+    group system input
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Citadel
+service vendor.citadeld /vendor/bin/hw/citadeld
+    class early_hal
+    user hsm
+    group hsm
+    disabled
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# EdgeTPU
+service edgetpu_vendor_service /vendor/bin/hw/vendor.google.edgetpu_vendor_service@1.0-service
+    interface aidl com.google.edgetpu.IEdgeTpuVendorService/default
+    disabled
+    oneshot
+    user system
+    group system
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Graphics allocator
+service vendor.graphics.allocator-default /vendor/bin/hw/android.hardware.graphics.allocator-V2-service
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# HWC 3
+service vendor.hwcomposer-3 /vendor/bin/hw/android.hardware.composer.hwc3-service.pixel
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    onrestart restart surfaceflinger
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# HWC 2.4
+service vendor.hwcomposer-2-4 /vendor/bin/hw/android.hardware.graphics.composer@2.4-service
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    onrestart restart surfaceflinger
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Camera Provider
+service vendor.camera-provider-2-7-google /apex/com.google.pixel.camera.hal/bin/hw/android.hardware.camera.provider@2.7-service-google
+    class hal cameraWatchdog
+    user system
+    group system
+    namespace mnt
+    capabilities SYS_NICE
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+# Radioext
+service vendor.google.radioext@1.0 /vendor/bin/hw/vendor.google.radioext@1.0-service
+    class hal
+    user radio
+    group radio system
+    task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -412,6 +495,7 @@ service ril-daemon /vendor/bin/hw/rild_exynos
     group radio cache inet misc audio log readproc wakelock
     capabilities BLOCK_SUSPEND NET_ADMIN NET_RAW
     seclabel u:r:rild:s0
+    task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -421,10 +505,15 @@ service ril-daemon /vendor/bin/hw/rild_exynos
 # Modem
 service cpboot-daemon /vendor/bin/cbd -d -t ${ro.vendor.cbd.modem_type} -P by-name/${vendor.cbd.partition} -s 2
     class main
+    # FEATURE_CBD_GOOGLE
+    # Change to radio user
     user radio
     group radio system cache inet misc audio sdcard_rw log
+    # FEATURE_CBD_GOOGLE
+    # Add capabilities
     capabilities BLOCK_SUSPEND NET_ADMIN NET_RAW SYSLOG
     seclabel u:r:cbd:s0
+    task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
@@ -433,14 +522,19 @@ service cpboot-daemon /vendor/bin/cbd -d -t ${ro.vendor.cbd.modem_type} -P by-na
 
 # WiFi
 service wpa_supplicant /vendor/bin/hw/wpa_supplicant \
-    -O/data/vendor/wifi/wpa/sockets -dd \
-    -g@android:wpa_wlan0
-    interface aidl android.hardware.wifi.supplicant.ISupplicant/default
-    class main
-    socket wpa_wlan0 dgram 660 wifi wifi
-    user root
-    disabled
-    oneshot
+	-O/data/vendor/wifi/wpa/sockets -dd \
+	-g@android:wpa_wlan0
+	#   we will start as root and wpa_supplicant will switch to user wifi
+	#   after setting up the capabilities required for WEXT
+	#   user wifi
+	#   group wifi inet keystore
+	interface aidl android.hardware.wifi.supplicant.ISupplicant/default
+	class main
+	socket wpa_wlan0 dgram 660 wifi wifi
+	user root
+	disabled
+	oneshot
+    task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
