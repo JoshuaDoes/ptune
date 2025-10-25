@@ -17,29 +17,46 @@ FREQ=/sys/devices/system/cpu/cpufreq
 MM=/sys/kernel/mm
 THP=$MM/transparent_hugepage
 
-F0=$FREQ/policy0
-F1=$FREQ/policy4
-F2=$FREQ/policy6
-FS0=$F0/sched_pixel
-FS1=$F1/sched_pixel
-FS2=$F2/sched_pixel
-FD0=$FS0/down_rate_limit_us
-FD1=$FS1/down_rate_limit_us
-FD2=$FS2/down_rate_limit_us
-FU0=$FS0/up_rate_limit_us
-FU1=$FS1/up_rate_limit_us
-FU2=$FS2/up_rate_limit_us
+hide() {
+  command "$@" >/dev/null 2>&1
+}
+
+lock() {
+  if [ $# -lt 1 ]; then return; fi
+  hide chown root:root "$1"
+  if [ $# -gt 1 ]; then
+    hide chmod 200 "$1"
+    echo "$2" > "$1"
+  fi
+  hide chmod 000 "$1"
+}
+
+powervr_sched() {
+  gpu="/sys/class/devfreq/34f00000.gpu0"
+  poll="$gpu/polling_interval"
+  #af="$gpu/available_frequencies"
+  mif="$gpu/min_freq"
+  maf="$gpu/max_freq"
+  tf="$gpu/target_freq"
+  vm="$gpu/vote_manager"
+
+  lock "$poll" $1
+
+  min=198000000
+  max=1094000000
+  lock "$mif" $min
+  lock "$maf" $max
+  lock "$tf" $min
+  lock "$vm/soft_min_freq" $min
+  lock "$vm/soft_max_freq" $max
+}
 
 blocksched() {
-  depth="/sys/block/$1/queue/iosched/async_depth"
-  nrreq="/sys/block/$1/queue/nr_requests"
-  sched="/sys/block/$1/queue/scheduler"
-  chmod 200 "$depth"
-  chmod 200 "$nrreq"
-  chmod 200 "$sched"
-  echo "$2" > "$sched"
-  echo "$3" > "$nrreq"
-  echo "$4" > "$depth"
+  for block in /sys/block/sd*; do
+    lock "$block/queue/scheduler" $1
+    lock "$block/queue/nr_requests" $2
+    lock "$block/queue/iosched/async_depth" $3
+  done
 }
 
 schedgroup() {
@@ -49,42 +66,51 @@ schedgroup() {
   phc="$g/prefer_high_cap"
   pi="$g/prefer_idle"
   ts="$g/task_spreading"
-  chmod 200 "$umi"
-  chmod 200 "$uma"
-  chmod 200 "$phc"
-  chmod 200 "$pi"
-  chmod 200 "$ts"
-  echo "$2" > "$umi"
-  echo "$3" > "$uma"
-  echo "$4" > "$phc"
-  echo "$5" > "$pi"
-  echo "$6" > "$ts"
+  lock "$umi" $2
+  lock "$uma" $3
+  lock "$phc" $4
+  lock "$pi" $5
+  lock "$ts" $6
 }
 
 sched() {
   ramp="$VS/adpf_rampup_multiplier"
-  lat="$VS/latency_ns"
   rpi="$VS/reduce_prefer_idle"
-  chmod 200 "$ramp"
-  chmod 200 "$lat"
-  chmod 200 "$rpi"
-  echo "$1" > "$ramp"
-  echo "$2" > "$lat"
-  echo "$3" > "$rpi"
+  api="$VS/auto_prefer_idle"
+  lat="$VS/latency_ns"
+  mg="$VS/min_granularity_ns"
+
+  lock "$ramp" $1
+  lock "$rpi" $2
+  lock "$api" $2
+  if [ -f "$lat" ]; then lock "$lat" $3; fi #rip laguna
+  if [ -f "$mg" ]; then lock "$mg" $3; fi
+  for policy in $FREQ/*; do
+    sp="$policy/sched_pixel"
+    cbl="$sp/cpu_busy_limit_ms"
+    rtms="$sp/response_time_ms"
+    if [ -f "$cbl" ]; then lock "$cbl" $4; fi
+    if [ -f "$rtms" ]; then lock "$rtms" $4; fi
+  done
 }
 
 delayfreqs() {
-  for down in "$FD0" "$FD1" "$FD2"; do
-    echo $1 > "$down"
-  done
-  for up in "$FU0" "$FU1" "$FU2"; do
-    echo $2 > "$up"
+  for policy in $FREQ/*; do
+    if [ -d "$policy/sched_pixel" ]; then
+      lock "$policy/sched_pixel/down_rate_limit_us" $1
+      lock "$policy/sched_pixel/up_rate_limit_us" $2
+    fi
+    if [ -d "$policy/vote_manager" ]; then #laguna
+      vm="$policy/vote_manager"
+      lock "$vm/soft_min_freq" $(cat "$policy/cpuinfo_min_freq")
+      lock "$vm/soft_max_freq" $(cat "$policy/cpuinfo_max_freq")
+    fi
   done
 }
 
 cpuset() {
   cs="$CS/$1"
-  echo "$2" > "$cs/cpus"
+  if [ -d "$cs" ]; then lock "$cs/cpus" "$2"; fi
 }
 
 bootcomplete() {
@@ -108,7 +134,10 @@ ptune() {
 cpuf="$(cat $CS/cpus)"
 
 # Allow vendor scheduler groups to fully utilize cores
-echo "2048 2048 2048 2048 2048 2048 2048 2048" > $VS/util_threshold
+lock $VS/util_threshold            9999 #?
+lock $VS/auto_uclamp_max           1024 #130 130 512 512 512 512 512 670
+lock $VS/auto_dvfs_headroom_enable 0    #0=off, 1=on
+lock $VS/dvfs_headroom             1280 #1100
 
 ## uclamp max ##
 # LITTLE = 158
@@ -152,27 +181,33 @@ cpuset top-app                      "$cpuf" #0-7
 # down delay | up delay
 delayfreqs 0 0 #5000 0
 
+# Pixel CPUFreq scheduler rate
 # adpf rampup multiplier
-# latency in nanoseconds
 # reduce prefer idle
-sched 1 8333333 0 #2 8000000 0
+# latency in nanoseconds
+# latency in milliseconds, combo of cpu_busy_limit_ms (default 10) and response_time_ms (default 14)
+sched 1 0 8333333 8 #2 8000000 0
+
+# PowerVR GPU scheduling rate in milliseconds
+powervr_sched 8 #20
 
 # Speed up disk access
-# async depth
 # scheduler
-blocksched sda mq-deadline 100 16384 #62 62
-blocksched sdb mq-deadline 100 16384 #62 62
-blocksched sdc mq-deadline 100 16384 #62 62
-blocksched sdd mq-deadline 100 16384 #62 62
+# number of requests
+# async depth
+#blocksched mq-deadline 100 16384 #mq-deadline 62 62
+blocksched mq-deadline 500 20000 #mq-deadline 62 62
 
 # Adjust our kernel's tunables
-echo 0 > $VM/dirty_writeback_centisecs
-echo 0 > $VM/swappiness
-echo 1 > $VM/vfs_cache_pressure
-echo 1 > $KR/sched_child_runs_first
-echo within_size > $THP/shmem_enabled
-echo always > $THP/defrag
-echo always > $THP/enabled
+lock $VM/dirty_writeback_centisecs 0
+lock $VM/swappiness                0
+lock $VM/vfs_cache_pressure        1
+lock $THP/shmem_enabled            within_size
+lock $THP/defrag                   always
+lock $THP/enabled                  always
+
+# Adjust kernel tunables that still exist
+if [ -f "$VM/sched_child_runs_first" ]; then lock $VM/sched_child_runs_first 1; fi
 
 # Allow swap to reach 99% before triggering LMKD
 resetprop -n ro.lmk.swap_free_low_percentage 1
@@ -192,13 +227,19 @@ resetprop -n debug.sf.region_sampling_duration_ns      8333333  #unset
 resetprop -n debug.sf.region_sampling_period_ns        99999984 #unset
 resetprop -n debug.sf.region_sampling_timer_timeout_ns 99999984 #unset
 
+# Raise the amount of SurfaceFlinger layers that HWC should track
+resetprop -n ro.surface_flinger.max_frame_buffer_acquired_buffers 7 #3
+
+# Disable limiting the maximum frame rate for games at 60Hz
+resetprop -n debug.graphics.game_default_frame_rate.disabled true #unset
+
 }
 
 zram() {
   local gigs=${1:-1}
 
   log "Dumping zram:"
-  zramcfg >> "$LOGFILE"
+  log "$(zramcfg)"
 
   local kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
   local zramB=$(awk -v kb="$kb" -v g="$gigs" 'BEGIN{printf "%.0f\n", kb*1024 - g*1073741824}')
@@ -206,10 +247,15 @@ zram() {
   local zramTxt=$(awk -v b="$zramB" 'BEGIN{print int(b/1073741824)+1}')
 
   log "Resizing ZRAM to ${zramTxt}/${sizeTxt}GB"
-  zramcfg -s "$zramB" >> "$LOGFILE"
+  log "$(zramcfg -s $zramB)"
 }
 
 #########
+
+if [ -f "$DIRSH/debug" ]; then
+  # Start logging in case of early init failure
+  logcat > /cache/logcat.log &
+fi
 
 logwipe
 
@@ -217,7 +263,7 @@ log "Setting initial boot values"
 ptune
 
 # Avoid waiting to finalize values if we're already through init's boot sequence
-if [ "$(bootcomplete)" == "1" ]; then
+if [ "$(bootcomplete)" -eq "1" ]; then
   zram
 
   log "No need to finalize new values"

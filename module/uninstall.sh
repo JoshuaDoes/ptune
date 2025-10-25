@@ -10,17 +10,20 @@ fi
 
 PATH="$MODDIR/bin:$PATH"
 SLOT="$(getprop | grep ro.boot.slot_suffix | sed -e 's/.*: \[\(.*\)\].*/\1/')"
-BOOT=boot.img
+BOOT=boot
+if [ -c "/dev/block/bootdevice/by-name/init_boot$SLOT" ]; then
+  BOOT=init_boot
+fi
 
 cd "$MODDIR"
 chmod +x "$MODDIR/bin/magiskboot"
 
-echo "* Copying boot$SLOT"
-cp /dev/block/bootdevice/by-name/boot$SLOT boot.img
+echo "* Copying $BOOT$SLOT"
+cp /dev/block/bootdevice/by-name/$BOOT$SLOT $BOOT.img
 
-echo "* Unpacking boot$SLOT"
-rm boot-new.img header kernel ramdisk.cpio >/dev/null 2>&1
-magiskboot unpack -h $BOOT
+echo "* Unpacking $BOOT$SLOT"
+rm $BOOT-new.img header kernel ramdisk.cpio >/dev/null 2>&1
+magiskboot unpack -h $BOOT.img
 
 echo "* Restoring ramdisk"
 cd ramdisk
@@ -44,15 +47,15 @@ done
 unset IFS; set +f
 cd ..
 
-echo "* Repacking boot$SLOT"
-magiskboot repack $BOOT boot-new.img
+echo "* Repacking $BOOT$SLOT"
+magiskboot repack $BOOT.img $BOOT-new.img
 rm header kernel ramdisk.cpio
 
-echo "* Flashing boot$SLOT"
-cp boot-new.img /dev/block/bootdevice/by-name/boot$SLOT
+echo "* Flashing $BOOT$SLOT"
+cp $BOOT-new.img /dev/block/bootdevice/by-name/$BOOT$SLOT
 
 echo "* Cleaning up"
-rm boot.img boot-new.img header kernel ramdisk.cpio
+rm $BOOT.img $BOOT-new.img header kernel ramdisk.cpio
 rm -rf META-INF
 
 echo "* Removing service"

@@ -1,5 +1,13 @@
 # ptune.rc by JoshuaDoes for use with Pixel Tune
 # Careful with your changes!
+#
+# Current template:
+#    task_profiles ProcessCapacityMax MaxPerformance
+#    ioprio rt 4
+#    rlimit rtprio 10 10
+#    rlimit memlock unlimited unlimited
+#    priority -20
+#    writepid /dev/cpuset/system/tasks
 
 ### INIT STAGES ###
 
@@ -9,12 +17,10 @@ on early-init
     chown system system /dev/cpuset/system/tasks
     chmod 0664 /dev/cpuset/system/tasks
     write /dev/cpuset/system/cpus 0-7
-    write /dev/cpuset/system/cpus 0-8
     write /dev/cpuset/system/mems 0
 
-### SERVICES ###
+### Specific to Android 16 (BD3A.250721.001.E1) ###
 
-# Zygote64
 service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-system-server --socket-name=zygote
     class main
     user root
@@ -40,7 +46,6 @@ service zygote /system/bin/app_process64 -Xzygote /system/bin --zygote --start-s
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Zygote64_32
 service zygote_secondary /system/bin/app_process32 -Xzygote /system/bin --zygote --socket-name=zygote_secondary --enable-lazy-preload
     class main
     user root
@@ -55,7 +60,6 @@ service zygote_secondary /system/bin/app_process32 -Xzygote /system/bin --zygote
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Service manager
 service servicemanager /system/bin/servicemanager
     class core animation
     user system
@@ -77,13 +81,13 @@ service servicemanager /system/bin/servicemanager
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Audio server
 service audioserver /system/bin/audioserver
     class core
     user audioserver
     # media gid needed for /dev/fm (radio) and for /data/misc/media (tee)
     group audio camera drmrpc media mediadrm net_bt net_bt_admin net_bw_acct wakelock
     capabilities BLOCK_SUSPEND
+    # match rtprio cur / max with sensor service as we handle AR/VR HID sensor data.
     onrestart restart vendor.audio-hal
     onrestart restart vendor.audio-hal-aidl
     onrestart restart vendor.audio-effect-hal-aidl
@@ -96,7 +100,6 @@ service audioserver /system/bin/audioserver
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Camera server
 service cameraserver /system/bin/cameraserver
     class main
     user cameraserver
@@ -111,7 +114,6 @@ service cameraserver /system/bin/cameraserver
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Virtual Camera
 service virtual_camera /system/bin/virtual_camera
     class core
     user system
@@ -128,7 +130,6 @@ service virtual_camera /system/bin/virtual_camera
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# USB
 service usbd /system/bin/usbd
     class late_start
     oneshot
@@ -141,7 +142,6 @@ service usbd /system/bin/usbd
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Media extractor
 service mediaextractor /system/bin/mediaextractor
     class main
     user mediaex
@@ -153,7 +153,6 @@ service mediaextractor /system/bin/mediaextractor
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Media metrics
 service mediametrics /system/bin/mediametrics
     class main
     user media
@@ -165,7 +164,6 @@ service mediametrics /system/bin/mediametrics
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Media server
 service media /system/bin/mediaserver
     class main
     user media
@@ -177,7 +175,6 @@ service media /system/bin/mediaserver
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# SurfaceFlinger
 service surfaceflinger /system/bin/surfaceflinger
     class core animation
     user system
@@ -191,7 +188,6 @@ service surfaceflinger /system/bin/surfaceflinger
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Package installer
 service installd /system/bin/installd
     class main
     user root
@@ -203,7 +199,6 @@ service installd /system/bin/installd
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# APEX installer
 service apexd /system/bin/apexd
     interface aidl apexservice
     class core
@@ -222,7 +217,6 @@ service apexd /system/bin/apexd
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# APEX daemon (bootstrapper)
 service apexd-bootstrap /system/bin/apexd --bootstrap
     user root
     group system
@@ -239,7 +233,6 @@ service apexd-bootstrap /system/bin/apexd --bootstrap
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# APEX manager (snapshot & restore)
 service apexd-snapshotde /system/bin/apexd --snapshotde
     user root
     group system
@@ -255,7 +248,6 @@ service apexd-snapshotde /system/bin/apexd --snapshotde
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Update engine
 service update_engine /system/bin/update_engine --logtostderr --logtofile --foreground
     class late_start
     user root
@@ -268,7 +260,6 @@ service update_engine /system/bin/update_engine --logtostderr --logtofile --fore
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Update verifier
 service update_verifier /system/bin/update_verifier
     user root
     group cache system
@@ -279,7 +270,6 @@ service update_verifier /system/bin/update_verifier
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Gatekeeper
 service gatekeeperd /system/bin/gatekeeperd /data/misc/gatekeeper
     class late_start
     user system
@@ -290,11 +280,11 @@ service gatekeeperd /system/bin/gatekeeperd /data/misc/gatekeeper
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Keystore
 service keystore2 /system/bin/keystore2 /data/misc/keystore
     class early_hal
     user keystore
     group keystore readproc log
+    # The default memlock limit of 65536 bytes is too low for keystore.
     # Reboot to bootloader if Keystore crashes more than 4 times before `sys.boot_completed`.
     critical window=0
     task_profiles ProcessCapacityMax MaxPerformance
@@ -304,7 +294,6 @@ service keystore2 /system/bin/keystore2 /data/misc/keystore
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Credstore
 service credstore /system/bin/credstore /data/misc/credstore
     class core
     user credstore
@@ -316,9 +305,8 @@ service credstore /system/bin/credstore /data/misc/credstore
     priority -20
     writepid /dev/cpuset/system/tasks
 
-### Pixel specific
+### Specific to Pixel 10 ###
 
-# Power
 service vendor.power-hal-aidl /vendor/bin/hw/android.hardware.power-service.pixel-libperfmgr
     class hal
     user root
@@ -330,7 +318,6 @@ service vendor.power-hal-aidl /vendor/bin/hw/android.hardware.power-service.pixe
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# AOC
 service aocd /vendor/bin/aocd
     class late_start
     user root
@@ -342,7 +329,6 @@ service aocd /vendor/bin/aocd
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# AOCX
 service aocxd /vendor/bin/aocxd
     class late_start
     user root
@@ -354,13 +340,13 @@ service aocxd /vendor/bin/aocxd
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Audio
-service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
+service vendor.audio-hal-aidl /vendor/bin/hw/android.hardware.audio.service-aidl.aoc
     class hal
     user audioserver
     # media gid needed for /dev/fm (radio) and for /data/misc/media (tee)
     group audio camera drmrpc inet media mediadrm net_bt net_bt_admin net_bw_acct wakelock context_hub system
     capabilities BLOCK_SUSPEND SYS_NICE
+    # setting RLIMIT_RTPRIO allows binder RT priority inheritance
     onrestart restart audioserver
     task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
@@ -369,7 +355,6 @@ service vendor.audio-hal /vendor/bin/hw/android.hardware.audio.service
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# TwoShay
 service twoshay /vendor/bin/twoshay -s
     class hal
     user root
@@ -382,11 +367,13 @@ service twoshay /vendor/bin/twoshay -s
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Fingerprint
-service vendor.fingerprint-goodix /vendor/bin/hw/android.hardware.biometrics.fingerprint-service.goodix
-    class late_start
-    user system
-    group system input
+service com.google.input.gia.giacore /vendor/bin/gia -s
+    interface aidl com.google.input.gia.core.IGiaService/default
+    class hal
+    user root
+    group input
+    oneshot
+    disabled
     task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
@@ -394,7 +381,22 @@ service vendor.fingerprint-goodix /vendor/bin/hw/android.hardware.biometrics.fin
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Citadel
+service qfp-daemon /vendor/bin/hw/qfp-daemon
+    interface aidl android.hardware.biometrics.fingerprint.IFingerprint/default
+    interface aidl vendor.qti.hardware.fingerprint.IQfpExtendedFingerprint/default
+    interface aidl com.google.hardware.biometrics.fingerprint.debug.IFingerprintDebug/default
+    class late_start
+    user system
+    disabled
+    group system drmrpc input wakelock
+    capabilities BLOCK_SUSPEND WAKE_ALARM
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
 service vendor.citadeld /vendor/bin/hw/citadeld
     class early_hal
     user hsm
@@ -407,13 +409,15 @@ service vendor.citadeld /vendor/bin/hw/citadeld
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# EdgeTPU
-service edgetpu_vendor_service /vendor/bin/hw/vendor.google.edgetpu_vendor_service@1.0-service
-    interface aidl com.google.edgetpu.IEdgeTpuVendorService/default
-    disabled
+service edgetpu_tachyon_service /vendor/bin/hw/com.google.edgetpu.tachyon-service
+    interface aidl com.google.edgetpu.tachyon.IComputeService/default
     oneshot
+    disabled
+    class hal
     user system
     group system
+    capabilities SYS_NICE
+    capabilities IPC_LOCK
     task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
@@ -421,7 +425,6 @@ service edgetpu_vendor_service /vendor/bin/hw/vendor.google.edgetpu_vendor_servi
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Graphics allocator
 service vendor.graphics.allocator-default /vendor/bin/hw/android.hardware.graphics.allocator-V2-service
     class hal animation
     user system
@@ -434,8 +437,19 @@ service vendor.graphics.allocator-default /vendor/bin/hw/android.hardware.graphi
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# HWC 3
-service vendor.hwcomposer-3 /vendor/bin/hw/android.hardware.composer.hwc3-service.pixel
+service pixel.graphics.allocator-aidl /vendor/bin/hw/pixel.gralloc.allocator-V2-service
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    task_profiles ProcessCapacityMax MaxPerformance
+    ioprio rt 4
+    rlimit rtprio 10 10
+    rlimit memlock unlimited unlimited
+    priority -20
+    writepid /dev/cpuset/system/tasks
+
+service vendor.hwcomposer-3 /vendor/bin/hw/android.hardware.composer.drm-hwc3-service
     class hal animation
     user system
     group graphics drmrpc
@@ -448,21 +462,6 @@ service vendor.hwcomposer-3 /vendor/bin/hw/android.hardware.composer.hwc3-servic
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# HWC 2.4
-service vendor.hwcomposer-2-4 /vendor/bin/hw/android.hardware.graphics.composer@2.4-service
-    class hal animation
-    user system
-    group graphics drmrpc
-    capabilities SYS_NICE
-    onrestart restart surfaceflinger
-    task_profiles ProcessCapacityMax MaxPerformance
-    ioprio rt 4
-    rlimit rtprio 10 10
-    rlimit memlock unlimited unlimited
-    priority -20
-    writepid /dev/cpuset/system/tasks
-
-# Camera Provider
 service vendor.camera-provider-2-7-google /apex/com.google.pixel.camera.hal/bin/hw/android.hardware.camera.provider@2.7-service-google
     class hal cameraWatchdog
     user system
@@ -476,7 +475,6 @@ service vendor.camera-provider-2-7-google /apex/com.google.pixel.camera.hal/bin/
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Radioext
 service vendor.google.radioext@1.0 /vendor/bin/hw/vendor.google.radioext@1.0-service
     class hal
     user radio
@@ -488,7 +486,6 @@ service vendor.google.radioext@1.0 /vendor/bin/hw/vendor.google.radioext@1.0-ser
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# RIL
 service ril-daemon /vendor/bin/hw/rild_exynos
     class main
     user radio
@@ -502,7 +499,6 @@ service ril-daemon /vendor/bin/hw/rild_exynos
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# Modem
 service cpboot-daemon /vendor/bin/cbd -d -t ${ro.vendor.cbd.modem_type} -P by-name/${vendor.cbd.partition} -s 2
     class main
     # FEATURE_CBD_GOOGLE
@@ -520,23 +516,21 @@ service cpboot-daemon /vendor/bin/cbd -d -t ${ro.vendor.cbd.modem_type} -P by-na
     priority -20
     writepid /dev/cpuset/system/tasks
 
-# WiFi
 service wpa_supplicant /vendor/bin/hw/wpa_supplicant \
-	-O/data/vendor/wifi/wpa/sockets -dd \
-	-g@android:wpa_wlan0
-	#   we will start as root and wpa_supplicant will switch to user wifi
-	#   after setting up the capabilities required for WEXT
-	#   user wifi
-	#   group wifi inet keystore
-	interface aidl android.hardware.wifi.supplicant.ISupplicant/default
-	class main
-	socket wpa_wlan0 dgram 660 wifi wifi
-	user root
-	disabled
-	oneshot
+    -O/data/vendor/wifi/wpa/sockets -dd \
+    -g@android:wpa_wlan0
+    interface aidl android.hardware.wifi.supplicant.ISupplicant/default
+    class main
+    socket wpa_wlan0 dgram 660 wifi wifi
+    user wifi
+    group wifi net_raw net_admin
+    capabilities NET_RAW NET_ADMIN
+    disabled
+    oneshot
     task_profiles ProcessCapacityMax MaxPerformance
     ioprio rt 4
     rlimit rtprio 10 10
     rlimit memlock unlimited unlimited
     priority -20
     writepid /dev/cpuset/system/tasks
+
