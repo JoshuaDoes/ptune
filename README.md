@@ -1,3 +1,10 @@
+######
+
+### This README is out of date! Please pay attention to the release notes for a series of changelogs.
+
+######
+
+
 ## WARNINGS
 
 ### It goes without saying, your decision to use this module comes with risks. For example, your ambient and loaded temperatures may be different, your device may experience new types of never seen before levels of lag, and system services may behave in profoundly illegitimate ways. My phone hasn't blown up yet, but that doesn't mean it won't. (My phone is still fine, yours should be too.)
