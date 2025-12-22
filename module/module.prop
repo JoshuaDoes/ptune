@@ -1,7 +1,7 @@
 id=ptune
 name=Pixel Tune
-version=v1.6.1
-versionCode=161
+version=v1.7.2
+versionCode=172
 author=JoshuaDoes
-description=Installs a new system cpuset to allow more breathing room for core system components and unlocks the potential of the rest of the system, improving battery life and performance all at once. Must be reinstalled using the Magisk button labelled 'Action' after any updates to your ROM, kernel, or Magisk install! Must be uninstalled prior to OTAs if Magisk doesn't live in boot (as is the case on Pixel 7 series and newer). Uninstalls are safe, read the README!
+description=Allows more breathing room for core system components, and unlocks the potential of the rest of the system. Simultaneously improves battery life and performance all at once on devices known to be fully compatible! Must be reinstalled using the Magisk action button after updating (even, before or after rebooting into) your ROM, kernel, or Magisk install! Must be uninstalled prior to taking incremental OTAs. Uninstalls are safe, please refer to the README!
 updateJson=https://raw.githubusercontent.com/JoshuaDoes/ptune/dev/update.json
