@@ -607,7 +607,7 @@ resetprop -n debug.sf.region_sampling_timer_timeout_ns 99999984 #unset
 # Disable limiting the maximum frame rate for games at 60Hz
 resetprop -n debug.graphics.game_default_frame_rate.disabled true #unset
 
-if [ "$(platform)" = "laguna" ]; then
+if [ "$(platform)" == "laguna" ]; then
   # Raise the amount of SurfaceFlinger buffers that should remain allocated to prevent GC overhead
   resetprop -n ro.surface_flinger.max_frame_buffer_acquired_buffers 7 #3
 
