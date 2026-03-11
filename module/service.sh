@@ -1,7 +1,13 @@
 #!/system/bin/sh
 
+name() {
+  echo "Pixel Tune"
+}
 version() {
-  echo "Pixel Tune v1.7.2"
+  echo "v2.0.0-alpha11"
+}
+build() {
+  echo "$(name) $(version)"
 }
 platform() {
   getprop ro.board.platform
@@ -12,77 +18,120 @@ brand() {
 device() {
   getprop ro.product.device
 }
+soc() {
+  getprop ro.soc.model
+}
+
+## CONFIG
+
+BOOT_WAIT=5
+
+##
+
+## RUNTIME
 
 #MODDIR=${0%/*}
 DIRSH="$(dirname $0)"
 DIRBIN="$DIRSH/bin"
+export PATH="$DIRBIN:$PATH"
 
-PATH="$DIRBIN:$PATH"
-LOGFILE="/cache/ptune.log"
+cd "$DIRSH"
+
+TMPC=/cache/ptune
+STOP=$TMPC/stop_powerpulse
+LOGFILE=$TMPC/service.log
 
 VM=/proc/sys/vm
 KR=/proc/sys/kernel
 CS=/dev/cpuset
 VS=/proc/vendor_sched
+VSM=$VS/min_granularity_ns
+VSL=$VS/latency_ns
 VSG=$VS/groups
 FREQ=/sys/devices/system/cpu/cpufreq
+DF=/sys/class/devfreq
 MM=/sys/kernel/mm
 THP=$MM/transparent_hugepage
 
+BIGMAX=9999999999
+
+##
+
 logwipe() {
-  rm -f "$LOGFILE"
+  rm -f $LOGFILE
+  mkdir -p $(dirname $LOGFILE)
 }
 
 log() {
-  ls="($DIRSH) ptune: $1"
+  ls="[$(date)] $1"
   echo "$ls" >> "$LOGFILE"
   echo "$ls"
 }
 
 hide() {
-  command "$@" >>"$LOGFILE" 2>&1
+#  if command "$@" >>"$LOGFILE" 2>&1; then
+#    log "[#] $*"
+#  else
+#    log "[!] $*"
+#  fi
+  if ! command "$@" >>"$LOGFILE" 2>&1; then
+    log "[!] $*"
+  fi
 }
 
 lock() {
   if [ $# -lt 1 ]; then return; fi
   if [ ! -f "$1" ]; then return; fi
   chown root:root "$1"
-  #hide chown root:root "$1"
   if [ $# -gt 1 ]; then
-    chmod 200 "$1"
-    #hide chmod 200 "$1"
+    chmod 200 "$1" #write
+    log "[*] $2 > $1"
     echo "$2" > "$1"
+  else
+    log "[*] $1"
   fi
-  chmod 000 "$1"
-  #hide chmod 000 "$1"
+  chmod 000 "$1" #lock
+}
+lockread() {
+  if [ $# -lt 1 ]; then return; fi
+  if [ ! -f "$1" ] && [ ! -c "$1" ]; then return; fi
+  chmod 400 "$1" #read
+  cat "$1"
+  chmod 000 "$1" #lock
+}
+
+compare() {
+  if echo "$1" | grep "$2" - >/dev/null; then
+    true
+  else
+    false
+  fi
+  return $?
 }
 
 powervr_sched() {
   gpu="/sys/class/devfreq/34f00000.gpu0"
   poll="$gpu/polling_interval"
-  #af="$gpu/available_frequencies"
-#  mif="$gpu/min_freq"
+  mif="$gpu/min_freq"
   maf="$gpu/max_freq"
-#  tf="$gpu/target_freq"
+  tf="$gpu/target_freq"
   vm="$gpu/vote_manager"
 
   lock "$poll" $1
 
-  min=0
-  max=9999999999
+  min=${2:-0}
+  max=${3:-$BIGMAX}
 
-#  lock "$mif" $min
+  lock "$mif" $min
   lock "$maf" $max
-#  lock "$tf" $min
-#  lock "$vm/soft_min_freq" $min
-#  lock "$vm/soft_min_freq" $max
+  lock "$tf" $min
+  lock "$vm/soft_min_freq" $min
   lock "$vm/soft_max_freq" $max
 }
 
 mali_sched() {
   gpu="/sys/devices/platform/1c500000.mali"
   dvfs="$gpu/dvfs_period"
-  #af="$gpu/available_frequencies"
   mif="$gpu/min_freq"
   maf="$gpu/max_freq"
   hmif="$gpu/hint_min_freq"
@@ -92,18 +141,16 @@ mali_sched() {
   smaf="$gpu/scaling_max_freq"
 
   lock "$dvfs" $1
-  #echo $1 > "$dvfs"
 
-  #TODO: Automatic min/max
-  min=0
-  max=9999999
+  min=${2:-0}
+  max=${3:-$BIGMAX}
 
-#  lock "$mif" $min
+  lock "$mif" $min
   lock "$maf" $max
-#  lock "$hmif" $min
+  lock "$hmif" $min
   lock "$hmaf" $max
-#  lock "$smif" $min
-#  lock "$smicf" $min
+  lock "$smif" $min
+  lock "$smicf" $min
   lock "$smaf" $max
 }
 
@@ -158,16 +205,116 @@ delayfreqs() {
     fi
     if [ -d "$policy/vote_manager" ]; then #laguna
       vm="$policy/vote_manager"
-      lock "$vm/soft_min_freq" $(cat "$policy/cpuinfo_min_freq")
-#      lock "$vm/soft_min_freq" $(cat "$policy/cpuinfo_max_freq")
-      lock "$vm/soft_max_freq" $(cat "$policy/cpuinfo_max_freq")
+      lock "$vm/soft_min_freq" $(lockread "$policy/cpuinfo_min_freq")
+      lock "$vm/soft_max_freq" $(lockread "$policy/cpuinfo_max_freq")
     fi
   done
 }
 
 cpuset() {
   cs="$CS/$1"
-  if [ -d "$cs" ]; then echo "$2" > "$cs/cpus"; fi
+  if [ -d "$cs" ]; then
+    echo "$2" > "$cs/cpus"
+    log "$1: $2"
+  fi
+}
+
+devfreq() {
+  if [ -d "$DF" ]; then
+    log "Unlocking all devfreq ranges"
+    cd "$DF"
+    for d in *; do
+      if [ ! -d "$d" ]; then continue; fi
+      log "Poking devfreq: $d"
+
+      #Don't touch the frequency range for blacklisted nodes
+      case $d in
+        dpu_freq) : ;;
+        *)
+          log "Unlocking devfreq: $d"
+
+          nmin="$d/min_freq"
+          nmax="$d/max_freq"
+          ntgt="$d/target_freq"
+          ngov="$d/governor"
+
+          min=$(lockread "$nmin")
+          max=$(lockread "$nmax")
+          tgt=$(lockread "$ntgt")
+          gov=$(lockread "$ngov")
+          log "Old: ${min:-0}Hz-${max:-0}Hz: targeting ${tgt:-0}Hz on $gov"
+
+          #Unlock the frequency range
+          lock "$nmin" 0
+          lock "$nmax" $BIGMAX
+          lock "$ntgt" $BIGMAX
+
+          #Tensor is weird bro
+          lock "$ngov" powersave
+
+          min=$(lockread "$nmin")
+          max=$(lockread "$nmax")
+          tgt=$(lockread "$ntgt")
+          gov=$(lockread "$ngov")
+          log "New: ${min:-0}Hz-${max:-0}Hz: targeting ${tgt:-0}Hz on $gov"
+
+          vm="$d/vote_manager"
+          if [ -d "$vm" ]; then
+            nvmdmin="$vm/debug_min_freq"
+            nvmdmax="$vm/debug_max_freq"
+            nvmpmin="$vm/powerhint_min_freq"
+            nvmpmax="$vm/powerhint_max_freq"
+            nvmsmin="$vm/soft_min_freq"
+            nvmsmax="$vm/soft_max_freq"
+            nvmtmax="$vm/thermal_max_freq"
+
+            vmdmin=$(lockread "$nvmdmin")
+            vmdmax=$(lockread "$nvmdmax")
+            vmpmin=$(lockread "$nvmpmin")
+            vmpmax=$(lockread "$nvmpmax")
+            vmsmin=$(lockread "$nvmsmin")
+            vmsmax=$(lockread "$nvmsmax")
+            vmtmax=$(lockread "$nvmtmax")
+            val="$vmdmin/$vmdmax/$vmpmin/$vmpmax/$vmsmin/$vmsmax/$vmtmax"
+            log "Old (debug/powerhint/soft) min/max, thermal max: $val"
+
+            lock "$nvmdmin" 0
+            lock "$nvmpmin" 0
+            lock "$nvmsmin" 0
+            lock "$nvmdmax" $max
+            lock "$nvmpmax" $max
+            lock "$nvmsmax" $max
+            lock "$nvmtmax" $max
+
+            vmdmin=$(lockread "$nvmdmin")
+            vmdmax=$(lockread "$nvmdmax")
+            vmpmin=$(lockread "$nvmpmin")
+            vmpmax=$(lockread "$nvmpmax")
+            vmsmin=$(lockread "$nvmsmin")
+            vmsmax=$(lockread "$nvmsmax")
+            vmtmax=$(lockread "$nvmtmax")
+            val="$vmdmin/$vmdmax/$vmpmin/$vmpmax/$vmsmin/$vmsmax/$vmtmax"
+            log "New (debug/powerhint/soft) min/max, thermal max: $val"
+          fi
+          ;;
+      esac
+
+      #Force the Emerald Hill memory compressor to run full speed
+      if [ "$d" = "eh_freq" ]; then lock "$d/governor" performance; fi
+    done
+    cd -
+  fi
+}
+
+ioprio() {
+  for pid_dir in /proc/[0-9]*; do
+    # Extract the PID from the directory path
+    pid="${pid_dir#/proc/}"
+
+    # Apply ionice (Class 1 = Real-time, Priority 4)
+    # Redirect all output to /dev/null for total silence
+    ionice -c 1 -n 4 -p "$pid" >/dev/null 2>&1
+  done
 }
 
 bootcomplete() {
@@ -192,16 +339,16 @@ mask_val() {
   done
 }
 hide_value() {
-  if [[ -e "$1" ]]; then
+  if [ -e "$1" ]; then
     umount "$1" 2>/dev/null
     c_path="/cache${1}"
-    if [[ ! -f "$c_path" ]]; then
+    if [ ! -f "$c_path" ]; then
       mkdir -p "$c_path"
       rm -r "$c_path"
     fi
     chattr -i "$c_path"
     cp -f "$1" "$c_path"
-    if [[ "$2" != "" ]]; then
+    if [ "$2" != "" ]; then
       lock_value "$2" "$1"
     fi
     mount --bind "$c_path" "$1"
@@ -277,12 +424,12 @@ unify_cgroup() {
 unify_sched() {
     # clear stune & uclamp
     for d in /dev/stune/*/; do
-        lock_val "0" $d/schedtune.boost
-        lock_val "0" $d/schedtune.prefer_idle
+        lock_val "0" "$d"schedtune.boost
+        lock_val "0" "$d"schedtune.prefer_idle
     done
     for d in /dev/cpuctl/*/; do
-        lock_val "0" $d/cpu.uclamp.min
-        lock_val "0" $d/cpu.uclamp.latency_sensitive
+        lock_val "0" "$d"cpu.uclamp.min
+        lock_val "0" "$d"cpu.uclamp.latency_sensitive
     done
     for d in kernel walt; do
         mask_val "0" /proc/sys/$d/sched_force_lb_enable
@@ -345,7 +492,7 @@ disable_userspace_thermal() {
     killall mi_thermald
     # prohibit mi_thermald use cpu thermal interface
     for i in 0 2 4 6 7; do
-        local maxfreq="$(cat /sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq)"
+        local maxfreq="$(lockread /sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq)"
         [ "$maxfreq" -gt "0" ] && lock_val "cpu$i $maxfreq" /sys/devices/virtual/thermal/thermal_message/cpu_limits
     done
 }
@@ -396,7 +543,7 @@ ximi() {
   if [ -d "$BUS_DIR" ]; then
     for d in $(ls $BUS_DIR); do
         [ ! -f $BUS_DIR/$d/hw_max_freq ] && continue
-        MAX_FREQ=$(cat $BUS_DIR/$d/hw_max_freq)
+        MAX_FREQ=$(lockread $BUS_DIR/$d/hw_max_freq)
         if [ -d "$BUS_DIR/$d" ]; then
           for df in $(ls $BUS_DIR/$d); do
               lock_val "$MAX_FREQ" "$BUS_DIR/$d/$df/max_freq"
@@ -429,7 +576,7 @@ ximi() {
   mask_val "0" /sys/module/perfmgr/parameters/perfmgr_enable
 
   migt=/sys/module/migt/parameters
-  if [[ -e $migt ]]; then
+  if [ -e $migt ]; then
     hide_value $migt/migt_freq '0:0 1:0 2:0 3:0 4:0 5:0 6:0 7:0'
     hide_value $migt/glk_freq_limit_start '0'
     hide_value $migt/glk_freq_limit_walt '0'
@@ -447,7 +594,7 @@ ximi() {
     chmod 000 /sys/module/sched_walt/holders/migt/parameters
   fi
   glk=/proc/sys/glk
-  if [[ -d $glk ]]; then
+  if [ -d $glk ]; then
     hide_value $glk/glk_disable '1'
     hide_value $glk/freq_break_enable '0'
     hide_value $glk/game_minfreq_limit '0 0 0'
@@ -456,7 +603,7 @@ ximi() {
     hide_value $glk/game_hispeed_load '80 80 80'
   fi
   migt=/proc/sys/migt
-  if [[ -d $migt ]]; then
+  if [ -d $migt ]; then
     hide_value $migt/force_stask_tob '0'
     hide_value $migt/enable_pkg_monitor '0'
     hide_value $migt/boost_pid '0'
@@ -472,14 +619,13 @@ ximi() {
 #########
 
 resetprop() {
-  hide echo -n "resetprop: $@\n"
-  hide resetprop "$@"
+  hide resetprop -n "$@" #Enforce bypassing property_service with all prop calls!
 }
 killall() {
   hide killall "$@"
 }
-chmod() {
-  hide chmod "$@"
+cd() {
+  hide cd "$@"
 }
 stop() {
   hide stop "$@"
@@ -487,106 +633,138 @@ stop() {
 start() {
   hide start "$@"
 }
+ionice() {
+  hide ionice "$@"
+}
 
 ptune() {
 
-log "$(version)"
+log "$(build)"
 log "Running on $(platform) for $(device)"
+log "Workdir: $DIRSH"
 
-# Allow vendor scheduler groups to fully utilize cores
-lock $VS/util_threshold                    9999 #?
-lock $VS/auto_uclamp_max                   1024 #130 130 512 512 512 512 512 670
-lock $VS/auto_uclamp_max_st_util_threshold 9999 #0 or 700
-lock $VS/auto_uclamp_max_st                1024 #1024 1024 1024 1024 1024 1024 1024 950
-lock $VS/uclamp_max_filter_enable             0 #0=off, 1=on
-lock $VS/auto_dvfs_headroom_enable            0 #0=off, 1=on
-lock $VS/tapered_dvfs_headroom_enable         0 #0=off, 1=on
-lock $VS/dvfs_headroom                     1280 #1100
+#### Allow vendor scheduler groups to fully utilize cores
+###lock $VS/util_threshold                    9999 #?
+###lock $VS/auto_uclamp_max                   1024 #130 130 512 512 512 512 512 670
+###lock $VS/auto_uclamp_max_st_util_threshold 9999 #0 or 700
+###lock $VS/auto_uclamp_max_st                1024 #1024 1024 1024 1024 1024 1024 1024 950
+###lock $VS/uclamp_max_filter_enable             0 #0=off, 1=on
+###lock $VS/auto_dvfs_headroom_enable            0 #0=off, 1=on
+###lock $VS/tapered_dvfs_headroom_enable         0 #0=off, 1=on
+###lock $VS/dvfs_headroom                     1280 #1100
+###
+##### uclamp max ##
+#### LITTLE = 158
+####    MID = 490
+####    BIG = 1024
+###################
+#### group
+#### uclamp min
+#### uclamp max
+#### prefer big
+#### prefer idle
+#### task spread
+###schedgroup bg        0    1024 0 1 0 #0     512
+###schedgroup cam       0    1024 0 1 0 #1    1024
+###schedgroup cam_power 0    1024 0 1 0 #0    1024
+###schedgroup dex2oat   0    1024 0 1 0 #0     615
+###schedgroup fg        0    1024 0 1 0 #0    1024
+###schedgroup fg_wi     0    1024 0 1 0 #0    1024
+###schedgroup nnapi     0    1024 0 1 0 #225  1024
+###schedgroup ota       0    1024 0 1 0 #0     512
+###schedgroup rt        0    1024 0 1 0 #0    1024
+###schedgroup sf        0    1024 0 1 0 #0    1024
+###schedgroup sys       0    1024 0 1 0 #0    1024
+###schedgroup sys_bg    0    1024 0 1 0 #0     512
+###schedgroup ta        0    1024 0 1 0 #1    1024
+###
+#### cpuset | cpus
+###cpuf="$(cat $CS/cpus)"
+###cpuset background                   $cpuf #0-3
+###cpuset camera-daemon                $cpuf #0-7
+###cpuset camera-daemon-high-group     $cpuf #6-7
+###cpuset camera-daemon-mid-group      $cpuf #4-5
+###cpuset camera-daemon-mid-high-group $cpuf #4-7
+###cpuset foreground                   $cpuf #0-5
+###cpuset foreground_window            $cpuf #0-5
+###cpuset restricted                   0-1   #0-3
+###cpuset system                       $cpuf #0-7 (custom, !sys)
+###cpuset system-background            $cpuf #0-3
+###cpuset top-app                      $cpuf #0-7
+###
+#### Give our CPU a lunch break when it wants one
+#### down delay | up delay
+###delayfreqs 0 0 #5000 0
+###
+#### Pixel CPUFreq scheduler rate
+#### adpf rampup multiplier (default 2)
+#### reduce prefer idle (default 1)
+#### latency in nanoseconds (default 8000000)
+#### latency in milliseconds, combo of cpu_busy_limit_ms (default 10) and response_time_ms (default 14)
+##### 120Hz
+####sched 1 0 8333333 8
+##### 240Hz
+####sched 1 0 4166666 4
+##### 500Hz
+####sched 1 0 2000000 2
+##### 1KHz
+####sched 1 0 1000000 1
+##### 2KHz
+####sched 1 0 500000 1
+##### 4KHz
+####sched 1 0 250000 1
+##### 5KHz
+####sched 1 0 200000 1
+##### ~6.0240001KHz
+####sched 1 0 166666 1
+##### 8KHz
+####sched 1 0 125000 1
+##### 10KHz
+####sched 1 0 100000 1
+##### 15KHz
+####sched 1 0 75000 1
+##### 20KHz
+####sched 1 0 50000 1
+##### 30KHz
+####sched 1 0 33333 1
+##### 40KHz
+####sched 1 0 25000 1
+##### 50KHz
+####sched 1 0 20000 1
+##### ~88.5KHz
+####sched 1 0 11300 1
+##### ~120KHz
+####sched 1 0 8333 1
+##### ~177KHz
+####sched 1 0 5650 1
+##### 2MHz
+###sched 1 0 500 1
+##### No limit
+####sched 1 0 0 1
+###
+#### Speed up disk access
+#### scheduler
+#### number of requests
+#### async depth
+###blocksched mq-deadline 500 5000 #mq-deadline 62 62
+###
+#### Adjust our kernel's tunables
+###lock $VM/dirty_writeback_centisecs 0
+###lock $VM/sched_child_runs_first    0
+###lock $VM/swappiness                1
+###lock $VM/vfs_cache_pressure        1
+###lock $THP/shmem_enabled            within_size
+###lock $THP/defrag                   always
+###lock $THP/enabled                  always
 
-## uclamp max ##
-# LITTLE = 158
-#    MID = 490
-#    BIG = 1024
-################
-# group
-# uclamp min
-# uclamp max
-# prefer big
-# prefer idle
-# task spread
-schedgroup bg        0    1024 0 1 0 #0     512
-schedgroup cam       0    1024 0 1 0 #1    1024
-schedgroup cam_power 0    1024 0 1 0 #0    1024
-schedgroup dex2oat   0    1024 0 1 0 #0     615
-schedgroup fg        0    1024 0 1 0 #0    1024
-schedgroup fg_wi     0    1024 0 1 0 #0    1024
-schedgroup nnapi     0    1024 0 1 0 #225  1024
-schedgroup ota       0    1024 0 1 0 #0     512
-schedgroup rt        0    1024 0 1 0 #0    1024
-schedgroup sf        0    1024 0 1 0 #0    1024
-schedgroup sys       0    1024 0 1 0 #0    1024
-schedgroup sys_bg    0    1024 0 1 0 #0     512
-schedgroup ta        0    1024 0 1 0 #1    1024
-
-# cpuset | cpus
-cpuf="$(cat $CS/cpus)"
-cpuset background                   "$cpuf" #0-3
-cpuset camera-daemon                "$cpuf" #0-7
-cpuset camera-daemon-high-group     "$cpuf" #6-7
-cpuset camera-daemon-mid-group      "$cpuf" #4-5
-cpuset camera-daemon-mid-high-group "$cpuf" #4-7
-cpuset foreground                   "$cpuf" #0-5
-cpuset foreground_window            "$cpuf" #0-5
-cpuset restricted                   0-3     #0-3
-cpuset system                       "$cpuf" #0-7 (custom, !sys)
-cpuset system-background            "$cpuf" #0-3
-cpuset top-app                      "$cpuf" #0-7
-
-# Give our CPU a lunch break when it wants one
-# down delay | up delay
-delayfreqs 0 0 #5000 0
-
-# Pixel CPUFreq scheduler rate
-# adpf rampup multiplier
-# reduce prefer idle
-# latency in nanoseconds
-# latency in milliseconds, combo of cpu_busy_limit_ms (default 10) and response_time_ms (default 14)
-## 120Hz
-#zsched 1 0 8333333 8 #2 1 8000000 (10/14)
-## 240Hz
-#sched 1 0 4166666 4
-## 1000Hz
-#sched 1 0 1000000 1
-## 2000Hz
-#sched 1 0 500000 1
-## 4000Hz
-#sched 1 0 250000 1
-## 5000Hz
-sched 1 0 200000 1
-## 8000Hz
-#sched 1 0 125000 1
-## 10000Hz
-#sched 1 0 100000 1
-## No limit
-#sched 1 0 0 1
-
-# Speed up disk access
-# scheduler
-# number of requests
-# async depth
-blocksched mq-deadline 500 20000 #mq-deadline 62 62
-
-# Adjust our kernel's tunables
-lock $VM/dirty_writeback_centisecs 0
-lock $VM/sched_child_runs_first    1
-lock $VM/swappiness                0
-lock $VM/vfs_cache_pressure        1
-lock $THP/shmem_enabled            within_size
-lock $THP/defrag                   always
-lock $THP/enabled                  always
+# Set the ADPF timer to 240Hz (stock 60Hz)
+resetprop vendor.powerhal.adpf.rate 4166666 #16666666
 
 # Allow swap to reach 99% before triggering LMKD
-resetprop -n ro.lmk.swap_free_low_percentage 1
+resetprop ro.lmk.swap_free_low_percentage 1
+
+# Disable limiting the maximum frame rate for games at 60Hz
+resetprop debug.graphics.game_default_frame_rate.disabled true #unset
 
 # Disable SurfaceFlinger frame dropping, no but for real
 resetprop -d debug.sf.use_phase_offsets_as_durations #1
@@ -599,51 +777,139 @@ resetprop -d debug.sf.earlyGl.app.duration           #16600000
 resetprop -d debug.sf.frame_rate_multiple_threshold  #120
 
 # Raise the frequency of sampling regions in SurfaceFlinger
-resetprop -n debug.sf.region_sampling_duration_ns      8333333  #unset
-#resetprop -n debug.sf.region_sampling_duration_ns      4166666  #unset
-resetprop -n debug.sf.region_sampling_period_ns        99999984 #unset
-resetprop -n debug.sf.region_sampling_timer_timeout_ns 99999984 #unset
+resetprop debug.sf.region_sampling_duration_ns      8333333  #unset
+resetprop debug.sf.region_sampling_period_ns        99999984 #unset
+resetprop debug.sf.region_sampling_timer_timeout_ns 99999984 #unset
 
-# Disable limiting the maximum frame rate for games at 60Hz
-resetprop -n debug.graphics.game_default_frame_rate.disabled true #unset
+# Instruct the Render Engine to use EGL_IMG_context_priority hint if available
+resetprop ro.surface_flinger.use_context_priority true
 
-if [ "$(platform)" == "laguna" ]; then
-  # Raise the amount of SurfaceFlinger buffers that should remain allocated to prevent GC overhead
-  resetprop -n ro.surface_flinger.max_frame_buffer_acquired_buffers 7 #3
+# Some hardware can do RGB->YUV conversion more efficiently in hardware
+# controlled by HWC than in hardware controlled by the video encoder.
+# This instruct VirtualDisplaySurface to use HWC for such conversion on
+# GL composition.
+resetprop ro.surface_flinger.force_hwc_copy_for_virtual_displays true #unset
 
-  # PowerVR GPU scheduling rate in milliseconds
-  ## 50Hz (stock)
-  #powervr_sched 20
-  ## ~120Hz
-  #powervr_sched 8
-  ## ~240Hz
-  #powervr_sched 4
-  ## 1000Hz
-  powervr_sched 1
-#elif [ "$(platform)" = "gs101" ] || \
-#     [ "$(platform)" = "gs201" ] || \
-#     [ "$(platform)" = "zuma" ]  || \
-#     [ "$(platform)" = "zumapro" ]; then
-  # Mali GPU scheduling rate in milliseconds
-  ## 50Hz (stock)
-  #mali_sched 20
-  ## ~120Hz
-  #mali_sched 8
-  ## ~240Hz
-  #mali_sched 4
-  ## 1000Hz
-  #mali_sched 1
+# Indicates if Sync framework is available. Sync framework provides fence
+# mechanism which significantly reduces buffer processing latency.
+resetprop ro.surface_flinger.running_without_sync_framework false
+
+# When enabled, SurfaceFlinger will attempt to clear the per-layer HAL buffer cache slots for
+# buffers when they are evicted from the app cache by using additional setLayerBuffer commands.
+# Ideally, this behavior would always be enabled to reduce graphics memory consumption. However,
+# Some HAL implementations may not support the additional setLayerBuffer commands used to clear
+# the cache slots.
+resetprop ro.surface_flinger.clear_slots_with_set_layer_buffer true #unset
+
+# setDisplayPowerTimerMs indicates what is considered a timeout in milliseconds for Scheduler.
+# This value is used by the Scheduler to trigger display power inactivity callbacks that will
+# keep the display in peak refresh rate as long as display power is not in normal mode.
+# Setting this property to 0 means there is no timer.
+resetprop ro.surface_flinger.set_display_power_timer_ms 1 #unset
+
+# Sets the timeout used to rate limit DISPLAY_UPDATE_IMMINENT Power HAL notifications.
+# SurfaceFlinger wakeups will trigger this boost whenever they are separated by more than this
+# duration (specified in milliseconds). A value of 0 disables the rate limit, and will result in
+# Power HAL notifications every time SF wakes up.
+resetprop ro.surface_flinger.display_update_imminent_timeout_ms 1 #50
+
+# setTouchTimerMs indicates what is considered a timeout in milliseconds for Scheduler.
+# This value is used by the Scheduler to trigger touch inactivity callbacks that will switch the
+# display to a lower refresh rate. Setting this property to 0 means there is no timer.
+resetprop ro.surface_flinger.set_touch_timer_ms 4 #200
+
+# Indicates whether Scheduler's idle timer should support a display driver timeout in the kernel.
+# The value of set_idle_timer_ms should be shorter in time than the timeout duration in the kernel.
+resetprop ro.surface_flinger.support_kernel_idle_timer true #unset
+
+# Similar to set_touch_timer_ms, but determines how long to wait before processing any new events.
+resetprop ro.surface_flinger.set_idle_timer_ms 4 #80
+
+#### PowerVR GPU scheduling rate in milliseconds
+##### Max freq, make the scheduler wait 10 seconds
+###powervr_sched 10000 $BIGMAX $BIGMAX
+##### 50Hz (stock)
+####powervr_sched 20
+##### ~120Hz
+####powervr_sched 8
+##### ~240Hz
+####powervr_sched 4
+##### 500Hz
+####powervr_sched 2
+##### 1KHz
+####powervr_sched 1
+##### No limit
+####powervr_sched 0
+###
+#### Mali GPU scheduling rate in milliseconds
+##### Max freq, make the scheduler wait 1 second
+###mali_sched 10000 $BIGMAX $BIGMAX
+##### 50Hz (stock)
+####mali_sched 20
+##### ~120Hz
+####mali_sched 8
+##### ~240Hz
+####mali_sched 4
+##### 500Hz
+####mali_sched 2
+##### 1KHz
+####mali_sched 1
+##### No limit
+####mali_sched 0
+
+if [ "$(platform)" = "laguna" ]; then
+  log "Target: Tensor G5 (laguna)"
+
+  # laguna has 7 total HWC layers
+  resetprop ro.surface_flinger.max_frame_buffer_acquired_buffers 7 #3
+elif [ "$(platform)" = "zuma" ] || \
+     [ "$(platform)" = "zumapro" ]; then
+  log "Target: Tensor G3 (zuma) | G4 (zumapro)"
+
+  # zuma/zumapro can at least handle 6 total HWC layers (TODO: confirm count)
+  resetprop ro.surface_flinger.max_frame_buffer_acquired_buffers 6 #3
+elif [ "$(platform)" = "gs101" ] || \
+     [ "$(platform)" = "gs201" ]; then
+  log "Target: Tensor G1 (gs101) | G2 (gs201)"
+
+  # gs101/gs201 has 6 total HWC layers
+  resetprop ro.surface_flinger.max_frame_buffer_acquired_buffers 6 #3
+
+###  ## CPU: 240Hz (stock: 125Hz)
+###  sched 1 0 4166666 4
+###
+###  ## GPU: 50Hz (stock: 50Hz)
+###  mali_sched 20
 fi
 
-# Xiaomi-oriented support amongst other potential Qualcomm devices
-ximi
+if [ "$(brand)" = "google" ]; then
+  # Controls the default frame rate override of game applications. Ideally, game applications set
+  # desired frame rate via setFrameRate() API. However, to cover the scenario when the game didn't
+  # have a set frame rate, we introduce the default frame rate. The priority of this override is the
+  # lowest among setFrameRate() and game intervention override.
+  if [ "$(device)" = "bluejay" ]; then
+    resetprop ro.surface_flinger.game_default_frame_rate_override 60
+  elif [ "$(device)" = "oriole" ] || \
+       [ "$(device)" = "cheetah" ] || \
+       [ "$(device)" = "lynx" ] || \
+       [ "$(device)" = "akita" ]; then
+    resetprop ro.surface_flinger.game_default_frame_rate_override 90
+  else
+    resetprop ro.surface_flinger.game_default_frame_rate_override 120
+  fi
+fi
+
+# Xiaomi-oriented support (targeting `sheng`) amongst other potential Qualcomm devices
+###if [ "$(brand)" != "google" ]; then
+###  ximi
+###fi
 
 }
 
 zram() {
   local gigs=${1:-1}
+  local comp=${2:-zstd}
 
-  log "Dumping zram:"
   log "$(zramcfg)"
 
   local kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
@@ -652,44 +918,135 @@ zram() {
   local zramTxt=$(awk -v b="$zramB" 'BEGIN{print int(b/1073741824)+1}')
 
   log "Resizing ZRAM to ${zramTxt}/${sizeTxt}GB"
-  log "$(zramcfg -s $zramB)"
+  log "$(zramcfg -s $zramB -c $comp -e)"
+}
+
+vrestart() {
+  vstop "$1" $2 && vstart "$1" $2
+}
+restart() {
+  stop "$1" && start "$1"
+}
+vstop() {
+  log "Stopping $1"
+  stop $2
+}
+vstart() {
+  log "Starting $1"
+  start $2
+}
+wait() {
+  if [ -f "$STOP" ]; then
+    log "Waiting"
+    while true; do
+      sleep 5
+      if [ ! -f "$STOP" ]; then break; fi
+    done
+  fi
 }
 
 #########
 
-if [ -f "$DIRSH/debug" ]; then
-  # Start logging in case of early init failure
-  logcat > /cache/logcat.log &
-fi
-
 logwipe
 
-log "Setting initial boot values"
-ptune
-if [ "$(brand)" == "google" ]; then
-  zram
-fi
-
-# Avoid waiting to finalize values if we're already through init's boot sequence
-if [ "$(bootcomplete)" -eq "1" ]; then
-  log "No need to finalize new values"
-  return || exit 0
-fi
-
-# Restart services to take in the new values
-restart() {
-  log "Stopping $1"
-  stop $2
-  log "Starting $1"
-  start $2
-}
-restart "SurfaceFlinger" surfaceflinger
-restart "libperfmgr"     vendor.power-hal-aidl
-
-log "Waiting for boot complete"
-while [ "$(bootcomplete)" != "1" ]; do sleep 1; done
-
-log "Finalizing values"
+log "Setting initial prop values"
 ptune
 
-log "Pixel Tune is done!"
+# Restart services to take in our new values
+stop bootanim
+restart surfaceflinger
+restart vendor.power-hal-aidl #To accept our powerhint.json
+start bootanim
+
+while true; do
+  killall powerpulse
+  log "Starting powerpulse..."
+  powerpulse "$DIRSH" "$(brand)" "$(platform)" "$(device)" "$(soc)"
+  log "Lost powerpulse: exit status $?"
+  wait
+done
+
+###if [ -f "$DIRSH/debug" ]; then
+###  # Remove the debug file to prevent overwriting the logcat on next boot
+###  rm -f "$DIRSH/debug"
+###
+###  # Start logcat in case of early init failure
+###  rm -f /cache/logcat.log
+###  logcat > /cache/logcat.log &
+###fi
+###
+###logwipe
+###
+###vrestart() {
+###  vstop "$1" $2 && vstart "$1" $2
+###}
+###vstop() {
+###  log "Stopping $1"
+###  stop $2
+###}
+###vstart() {
+###  log "Starting $1"
+###  start $2
+###}
+###
+###if [ "$(bootcomplete)" -eq "0" ]; then
+###  vstop "boot animation" bootanim
+###  vstop "SurfaceFlinger" surfaceflinger
+###fi
+###
+###log "Setting initial boot values"
+###ptune
+###
+###if [ "$(brand)" = "google" ] && compare "$(soc)" "Tensor"; then
+###    #Take advantage of lz77eh for all of RAM
+###    lock $VM/swappiness 100
+###    zram 0 lz77eh
+###fi
+###
+#### Avoid waiting to finalize values if we're already through init's boot sequence
+###if [ "$(bootcomplete)" -eq "1" ]; then
+###  log "No need to finalize new values"
+###  return || exit 0
+###fi
+###
+#### Restart services to take in the new values
+###vrestart "libperfmgr (power HAL)" vendor.power-hal-aidl
+###vrestart "SurfaceFlinger"         surfaceflinger
+###vstart   "boot animation"         bootanim
+###
+###log "Waiting for boot complete"
+###while [ "$(bootcomplete)" -eq "0" ]; do sleep 1; done
+###
+###log "Waiting ${BOOT_WAIT}s to let init finish"
+###sleep $BOOT_WAIT
+###
+####Unlock safe devfreq ranges
+###devfreq
+###
+####Make everything alive run a commune
+###ioprio
+###
+###log "Finalizing values"
+###ptune
+###
+###log "Pixel Tune is done!"
+###
+##### Consider not using $BOOT_WAIT?
+###VS_NS=""
+###if [ -f $VSM ]; then
+###  VS_NS=$VSM
+###elif [ -f $VSL ]; then
+###  VS_NS=$VSL
+###fi
+###if [ "$VS_NS" != "" ]; then
+###  VS_NSV=$(cat $VS_NS)
+###  log "Watching $VS_NS for changes: $VS_NSV"
+###  while true; do
+###    sleep $BOOT_WAIT
+###    if [ "$(cat $VS_NS)" != "$VS_NSV" ]; then
+###      log "Mismatched VS_NS"
+###      ptune
+###      sleep $BOOT_WAIT
+###    fi
+###  done
+###fi

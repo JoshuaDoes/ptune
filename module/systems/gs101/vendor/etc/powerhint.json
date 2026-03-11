@@ -101,18 +101,6 @@
       "ResetOnInit": true
     },
     {
-      "Name": "GPUMinFreq",
-      "Path": "/sys/devices/platform/1c500000.mali/hint_min_freq",
-      "Values": [
-        "762000",
-        "471000",
-        "400000",
-        "302000",
-        "151000"
-      ],
-      "ResetOnInit": true
-    },
-    {
       "Name": "DisplayWakeup",
       "Path": "/sys/devices/platform/1c300000.drmdecon/early_wakeup",
       "Values": [
@@ -932,12 +920,6 @@
     },
     {
       "PowerHint": "CAMERA_STREAMING_EXTREME",
-      "Node": "GPUMinFreq",
-      "Duration": 0,
-      "Value": "302000"
-    },
-    {
-      "PowerHint": "CAMERA_STREAMING_EXTREME",
       "Node": "MemFreq",
       "Duration": 0,
       "Value": "1014000"
@@ -980,12 +962,6 @@
     },
     {
       "PowerHint": "CAMERA_STREAMING_HIGH",
-      "Node": "GPUMinFreq",
-      "Duration": 0,
-      "Value": "302000"
-    },
-    {
-      "PowerHint": "CAMERA_STREAMING_HIGH",
       "Node": "MemFreq",
       "Duration": 0,
       "Value": "1014000"
@@ -1025,12 +1001,6 @@
       "Node": "CPULittleClusterMaxFreq",
       "Duration": 0,
       "Value": "1401000"
-    },
-    {
-      "PowerHint": "CAMERA_STREAMING_STANDARD",
-      "Node": "GPUMinFreq",
-      "Duration": 0,
-      "Value": "302000"
     },
     {
       "PowerHint": "CAMERA_STREAMING_STANDARD",
@@ -1091,12 +1061,6 @@
       "Node": "CPULittleClusterMaxFreq",
       "Duration": 0,
       "Value": "1401000"
-    },
-    {
-      "PowerHint": "CAMERA_STREAMING_LOW",
-      "Node": "GPUMinFreq",
-      "Duration": 0,
-      "Value": "302000"
     },
     {
       "PowerHint": "CAMERA_STREAMING_LOW",
@@ -1320,12 +1284,6 @@
       "Node": "PowerHALRenderingState",
       "Duration": 0,
       "Value": "EXPENSIVE_RENDERING"
-    },
-    {
-      "PowerHint": "EXPENSIVE_RENDERING",
-      "Node": "GPUMinFreq",
-      "Duration": 0,
-      "Value": "400000"
     },
     {
       "PowerHint": "THERMAL_VIRTUAL-SKIN-HINT_LIGHT",

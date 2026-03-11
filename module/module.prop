@@ -1,7 +1,7 @@
 id=ptune
 name=Pixel Tune
-version=v1.7.2
-versionCode=172
+version=v2.0.0-alpha11
+versionCode=200
 author=JoshuaDoes
-description=Allows more breathing room for core system components, and unlocks the potential of the rest of the system. Simultaneously improves battery life and performance all at once on devices known to be fully compatible! Must be reinstalled using the Magisk action button after updating (even, before or after rebooting into) your ROM, kernel, or Magisk install! Must be uninstalled prior to taking incremental OTAs. Uninstalls are safe, please refer to the README!
+description=Allows more breathing room for core system components, and unlocks the potential of the rest of the system (where safe). Simultaneously improves battery life and performance all at once on devices known to be fully compatible!
 updateJson=https://raw.githubusercontent.com/JoshuaDoes/ptune/dev/update.json
