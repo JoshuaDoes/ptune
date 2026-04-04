@@ -1,6 +1,6 @@
 id=ptune
 name=Pixel Tune
-version=v2.0.0-alpha11
+version=v2.0.0-alpha12
 versionCode=200
 author=JoshuaDoes
 description=Allows more breathing room for core system components, and unlocks the potential of the rest of the system (where safe). Simultaneously improves battery life and performance all at once on devices known to be fully compatible!

@@ -4,7 +4,7 @@ name() {
   echo "Pixel Tune"
 }
 version() {
-  echo "v2.0.0-alpha11"
+  echo "v2.0.0-alpha12"
 }
 build() {
   echo "$(name) $(version)"

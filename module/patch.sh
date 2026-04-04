@@ -1,5 +1,5 @@
 echo ""
-echo "Installing: Pixel Tune v2.0.0-alpha11"
+echo "Installing: Pixel Tune v2.0.0-alpha12"
 echo ""
 
 ## <<< Shamelessly borrowed from Magisk
