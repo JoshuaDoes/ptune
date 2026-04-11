@@ -4,7 +4,7 @@ name() {
   echo "Pixel Tune"
 }
 version() {
-  echo "v2.0.0-alpha12"
+  echo "v2.0.0-alpha13"
 }
 build() {
   echo "$(name) $(version)"
@@ -20,6 +20,9 @@ device() {
 }
 soc() {
   getprop ro.soc.model
+}
+tz() {
+  getprop persist.sys.timezone
 }
 
 ## CONFIG
@@ -961,7 +964,7 @@ start bootanim
 while true; do
   killall powerpulse
   log "Starting powerpulse..."
-  powerpulse "$DIRSH" "$(brand)" "$(platform)" "$(device)" "$(soc)"
+  powerpulse "$DIRSH" "$(brand)" "$(platform)" "$(device)" "$(soc)" "$(tz)"
   log "Lost powerpulse: exit status $?"
   wait
 done

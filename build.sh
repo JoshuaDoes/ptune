@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export VER="v2.0.0-alpha12"
+export VER="v2.0.0-alpha13"
 export TAG="ptune-$VER"
 export ZIP="$TAG.zip"
 export DIF="$TAG.diff"
